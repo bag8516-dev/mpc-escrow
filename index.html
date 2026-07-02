@@ -892,9 +892,12 @@ function calcSell() {
 
   // 원화 기반 계산: MPC단가(원) × 수량 = 총원화 → ÷ USDT환율 = 받을USDT
   const totalKrw = mpcAmt * pricePerMpc;
-  const rawUsdt  = totalKrw / krwPerUsdt;
-  const usdtCeil = Math.ceil(rawUsdt * 10) / 10;
   const pricePerMpcUsdt = pricePerMpc / krwPerUsdt; // 컨트랙트용 USDT 단가
+  // 컨트랙트와 동일한 정수 연산으로 USDT 계산 (부동소수점 불일치 방지)
+  // 컨트랙트: rawUsdt = mpcAmount * usdtPricePerMPC / 10^18, _ceilToOneDecimal
+  const priceWeiPreview = Math.round(parseFloat(pricePerMpcUsdt.toFixed(6)) * 1e6);
+  const rawUsdtMicro    = mpcAmt * priceWeiPreview;
+  const usdtCeil        = Math.ceil(rawUsdtMicro / 1e5) / 10;
 
   document.getElementById('sellTotalUsdt').textContent = `${usdtCeil.toFixed(1)} USDT`;
   document.getElementById('sellTotalKrw').textContent  = `${Math.round(totalKrw).toLocaleString()}원`;
@@ -936,8 +939,9 @@ async function createTradeFlow() {
     showError('❌ MPC 단가가 너무 낮습니다.<br>단가 또는 환율 값을 다시 확인해주세요.');
     return;
   }
-  const rawUsdt = mpcAmt * pricePerMpcUsdt;
-  const usdtCeil = Math.ceil(rawUsdt * 10) / 10;
+  // 컨트랙트와 동일한 정수 연산으로 USDT 계산 (calcSell과 일치)
+  const priceWeiConfirm = Math.round(parseFloat(pricePerMpcUsdt.toFixed(6)) * 1e6);
+  const usdtCeil = Math.ceil(mpcAmt * priceWeiConfirm / 1e5) / 10;
   const totalKrw = Math.round(mpcAmt * pricePerMpc);
 
   // 1. 수량 확인 팝업
