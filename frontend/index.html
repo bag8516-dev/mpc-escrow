@@ -1145,7 +1145,8 @@ function tradeItemHtml(t) {
     } else {
       buttons = `
         <div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ 만료까지 ${remainMin}분 ${remainSec}초</div>
-        <button class="btn btn-sm btn-danger" style="margin-top:8px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
+        <button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="copyTradeLink('${t.tradeId}')">🔗 구매자 링크 다시 복사</button>
+        <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
     }
   } else if (t.status === 'ACTIVE') {
     if (role === '판매자') {
@@ -1177,6 +1178,16 @@ function tradeItemHtml(t) {
     <div style="font-size:12px;color:var(--text3);margin-top:6px">상대방: ${partnerShort}</div>
     ${buttons}
   </div>`;
+}
+
+function copyTradeLink(tradeId) {
+  const pageUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
+  const deepLink = `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(pageUrl)}`;
+  navigator.clipboard.writeText(deepLink).then(() => {
+    showToast('✅ 링크 복사 완료! 카카오톡으로 전송하세요');
+  }).catch(() => {
+    showError('링크 복사에 실패했습니다.<br>직접 복사하세요:<br><br><small style="word-break:break-all">' + deepLink + '</small>');
+  });
 }
 
 async function cancelTradeById(tradeId) {
