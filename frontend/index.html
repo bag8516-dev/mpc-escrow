@@ -661,13 +661,22 @@ async function connectWallet() {
       return;
     }
     // 외부 브라우저: Reown AppKit QR 모달
+    if (window.__appKitError) {
+      resetButton(btn, '🔗 지갑 연결하기');
+      showToast('WalletConnect 오류: ' + window.__appKitError);
+      return;
+    }
     if (!window.__appKit) {
       resetButton(btn, '🔗 지갑 연결하기');
       showToast('SDK 로딩 중입니다. 잠시 후 다시 시도해주세요.');
       return;
     }
     resetButton(btn, '🔗 지갑 연결하기');
-    window.__appKit.open();
+    try {
+      await window.__appKit.open();
+    } catch(e) {
+      showToast('연결 오류: ' + (e.message || String(e)));
+    }
   } catch (err) {
     resetButton(btn, '🔗 지갑 연결하기');
     showToast('오류: ' + (err.message || String(err)));
@@ -1371,49 +1380,53 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 <!-- Reown AppKit (WalletConnect v2) -->
 <script type="module">
-  import { createAppKit } from 'https://esm.sh/@reown/appkit@1.6.8';
-  import { EthersAdapter } from 'https://esm.sh/@reown/appkit-adapter-ethers@1.6.8';
-  import { defineChain } from 'https://esm.sh/@reown/appkit/networks';
+  try {
+    const [{ createAppKit }, { EthersAdapter }, { defineChain }] = await Promise.all([
+      import('https://esm.sh/@reown/appkit@1.6.8'),
+      import('https://esm.sh/@reown/appkit-adapter-ethers@1.6.8'),
+      import('https://esm.sh/@reown/appkit/networks'),
+    ]);
 
-  const polygon = defineChain({
-    id: 137,
-    name: 'Polygon',
-    nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-    rpcUrls: { default: { http: ['https://polygon-bor-rpc.publicnode.com'] } },
-    blockExplorers: { default: { name: 'Polygonscan', url: 'https://polygonscan.com' } },
-  });
+    const polygon = defineChain({
+      id: 137,
+      name: 'Polygon',
+      nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+      rpcUrls: { default: { http: ['https://polygon-bor-rpc.publicnode.com'] } },
+      blockExplorers: { default: { name: 'Polygonscan', url: 'https://polygonscan.com' } },
+    });
 
-  const ethersAdapter = new EthersAdapter();
+    window.__appKit = createAppKit({
+      adapters: [new EthersAdapter()],
+      networks: [polygon],
+      defaultNetwork: polygon,
+      metadata: {
+        name: 'MPC 에스크로',
+        description: 'MPC P2P 에스크로 - Polygon',
+        url: window.location.origin,
+        icons: [],
+      },
+      projectId: CONFIG.WC_PROJECT_ID,
+      features: { analytics: false, email: false, socials: false },
+      themeMode: 'dark',
+      themeVariables: { '--w3m-accent': '#C9A84C', '--w3m-border-radius-master': '12px' },
+    });
 
-  const metadata = {
-    name: 'MPC 에스크로',
-    description: 'MPC P2P 에스크로 - Polygon',
-    url: window.location.origin,
-    icons: [],
-  };
+    window.__appKit.subscribeProvider(async (state) => {
+      if (state.isConnected && state.address && state.provider) {
+        walletAddress = state.address;
+        window.__ethersProvider = new ethers.providers.Web3Provider(state.provider);
+        window.__ethersSigner = window.__ethersProvider.getSigner();
+        await ensurePolygonNetwork();
+        initContractsEthers();
+        onWalletConnected();
+      }
+    });
 
-  window.__appKit = createAppKit({
-    adapters: [ethersAdapter],
-    networks: [polygon],
-    defaultNetwork: polygon,
-    metadata,
-    projectId: CONFIG.WC_PROJECT_ID,
-    features: { analytics: false, email: false, socials: false },
-    themeMode: 'dark',
-    themeVariables: { '--w3m-accent': '#C9A84C', '--w3m-border-radius-master': '12px' },
-  });
-
-  // 연결 상태 구독
-  window.__appKit.subscribeProvider(async (state) => {
-    if (state.isConnected && state.address && state.provider) {
-      walletAddress = state.address;
-      window.__ethersProvider = new ethers.providers.Web3Provider(state.provider);
-      window.__ethersSigner = window.__ethersProvider.getSigner();
-      await ensurePolygonNetwork();
-      initContractsEthers();
-      onWalletConnected();
-    }
-  });
+    window.__appKitReady = true;
+  } catch(e) {
+    window.__appKitError = e.message || String(e);
+    console.error('AppKit 초기화 실패:', e);
+  }
 </script>
 </body>
 </html>
