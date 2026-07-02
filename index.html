@@ -360,8 +360,15 @@ a { color:var(--gold); text-decoration:none; }
     </div>
 
     <div style="padding:16px 16px 0" id="buyActionArea">
-      <div class="info-box">ℹ️ USDT 전송을 위해 <strong>총 2번 서명</strong>이 필요합니다<br>1번째: 에스크로 사용 허락 / 2번째: 실제 코인 전송</div>
-      <button class="btn btn-success" id="btnBuyDeposit" onclick="buyDepositFlow()" style="margin-top:12px">USDT 예치하고 구매하기</button>
+      <div class="info-box" style="margin-bottom:10px">
+        ℹ️ <strong>거래 전 꼭 읽어주세요</strong><br><br>
+        1️⃣ 지갑 연결 시 <strong>"확인되지 않은 연결"</strong> 경고가 표시될 수 있습니다. 이는 Trust Wallet의 일반적인 보안 안내이며 정상입니다. <strong>"연결"</strong>을 눌러 진행해주세요.<br><br>
+        2️⃣ USDT 전송 시 <strong>총 2번 서명</strong>이 필요합니다.<br>
+        &nbsp;&nbsp;• 1번째: 에스크로 사용 허락 (Approve)<br>
+        &nbsp;&nbsp;• 2번째: 실제 USDT 전송<br><br>
+        3️⃣ 거래 후 지갑 내역에 <strong>승인·전송 2건</strong>이 표시되지만 실제 차감은 <strong>1회</strong>만 됩니다.
+      </div>
+      <button class="btn btn-success" id="btnBuyDeposit" onclick="buyDepositFlow()" style="margin-top:4px">USDT 예치하고 구매하기</button>
       <button class="btn btn-outline" id="btnBuyCancel" onclick="cancelTradeFlow()" style="margin-top:8px">거래 취소</button>
     </div>
     <!-- USDT 예치 후 대기 화면 -->
