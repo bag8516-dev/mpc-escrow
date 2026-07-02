@@ -359,10 +359,27 @@ a { color:var(--gold); text-decoration:none; }
       <div class="timer-count" id="timerCount">10:00</div>
     </div>
 
-    <div style="padding:16px 16px 0">
+    <div style="padding:16px 16px 0" id="buyActionArea">
       <div class="info-box">ℹ️ USDT 전송을 위해 <strong>총 2번 서명</strong>이 필요합니다<br>1번째: 에스크로 사용 허락 / 2번째: 실제 코인 전송</div>
       <button class="btn btn-success" id="btnBuyDeposit" onclick="buyDepositFlow()" style="margin-top:12px">USDT 예치하고 구매하기</button>
       <button class="btn btn-outline" id="btnBuyCancel" onclick="cancelTradeFlow()" style="margin-top:8px">거래 취소</button>
+    </div>
+    <!-- USDT 예치 후 대기 화면 -->
+    <div style="padding:16px;display:none" id="buyWaitArea">
+      <div class="success-box">✅ USDT 예치 완료! 판매자의 거래 확정을 기다리는 중입니다.</div>
+      <button class="btn btn-outline" onclick="cancelTradeFlow()" style="margin-top:10px">거래 취소 (양측 반환)</button>
+    </div>
+    <!-- 거래 완료 화면 -->
+    <div style="padding:16px;display:none;text-align:center" id="buyCompleteArea">
+      <div style="font-size:48px;margin-bottom:12px">🎉</div>
+      <div style="font-size:18px;font-weight:800;color:var(--success)">거래 완료!</div>
+      <div style="font-size:14px;color:var(--text2);margin-top:8px">MPC가 지갑으로 전송됐습니다.</div>
+    </div>
+    <!-- 취소/만료 화면 -->
+    <div style="padding:16px;display:none;text-align:center" id="buyCancelledArea">
+      <div style="font-size:48px;margin-bottom:12px">❌</div>
+      <div style="font-size:18px;font-weight:800;color:var(--danger)" id="buyCancelledMsg">거래가 취소됐습니다</div>
+      <div style="font-size:14px;color:var(--text2);margin-top:8px">USDT가 지갑으로 반환됩니다.</div>
     </div>
   </div>
 
@@ -1030,14 +1047,46 @@ async function buyDepositFlow() {
 
     await callBuyerDeposit(currentTradeId);
 
-    showToast('✅ USDT 예치 완료! 판매자 확정을 기다려주세요');
+    // 대기 화면으로 전환
+    document.getElementById('buyActionArea').style.display = 'none';
+    document.getElementById('buyWaitArea').style.display = 'block';
+    document.getElementById('buyTimerBar').style.display = 'none';
     resetButton(btn, 'USDT 예치하고 구매하기');
     loadUserTrades();
+
+    // 체인 상태 폴링 시작 (10초마다)
+    startBuyerStatusPolling(currentTradeId);
 
   } catch (err) {
     resetButton(btn, 'USDT 예치하고 구매하기');
     showError(parseError(err));
   }
+}
+
+let buyerPollInterval = null;
+function startBuyerStatusPolling(tradeId) {
+  if (buyerPollInterval) clearInterval(buyerPollInterval);
+  buyerPollInterval = setInterval(async () => {
+    try {
+      const trade = await fetchTrade(tradeId);
+      if (!trade) return;
+      const status = Number(trade.status);
+      // 4 = COMPLETED
+      if (status === 4) {
+        clearInterval(buyerPollInterval);
+        document.getElementById('buyWaitArea').style.display = 'none';
+        document.getElementById('buyCompleteArea').style.display = 'block';
+      }
+      // 5 = CANCELLED, 6 = EXPIRED
+      if (status === 5 || status === 6) {
+        clearInterval(buyerPollInterval);
+        document.getElementById('buyWaitArea').style.display = 'none';
+        document.getElementById('buyCancelledMsg').textContent =
+          status === 5 ? '거래가 취소됐습니다' : '거래가 만료됐습니다';
+        document.getElementById('buyCancelledArea').style.display = 'block';
+      }
+    } catch(e) {}
+  }, 10000);
 }
 
 // ── 취소 플로우 ────────────────────────────────────────────────────────────
