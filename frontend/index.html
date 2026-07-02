@@ -634,11 +634,35 @@ function setDeviceGuide() {
 
 // ── 지갑 연결 ──────────────────────────────────────────────────────────────
 async function connectWallet() {
-  if (!window.__appKit) {
-    showError('지갑 SDK가 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.');
-    return;
+  const btn = document.getElementById('btnConnect');
+  setButtonLoading(btn, '연결 중...');
+  try {
+    // Trust Wallet 내장 브라우저: window.ethereum 자동 주입됨
+    if (typeof window.ethereum !== 'undefined') {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) throw new Error('연결이 거부됐습니다');
+      walletAddress = accounts[0];
+      window.__ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+      window.__ethersSigner = window.__ethersProvider.getSigner();
+      await ensurePolygonNetwork();
+      initContractsEthers();
+      window.ethereum.on('accountsChanged', accs => { if (!accs.length) location.reload(); else { walletAddress = accs[0]; onWalletConnected(); } });
+      window.ethereum.on('chainChanged', () => location.reload());
+      onWalletConnected();
+      return;
+    }
+    // 외부 브라우저: Reown AppKit QR 모달
+    if (!window.__appKit) {
+      resetButton(btn, '🔗 지갑 연결하기');
+      showError('SDK 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    resetButton(btn, '🔗 지갑 연결하기');
+    window.__appKit.open();
+  } catch (err) {
+    resetButton(btn, '🔗 지갑 연결하기');
+    showError(parseError(err));
   }
-  window.__appKit.open();
 }
 
 async function ensurePolygonNetwork() {
