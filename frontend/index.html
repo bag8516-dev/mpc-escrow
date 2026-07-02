@@ -1353,7 +1353,21 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 </script>
 
 <!-- ethers.js v5 -->
-<script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+<script>
+// ethers.js 로드 (fallback 포함)
+(function() {
+  function loadEthers(url, fallback) {
+    var s = document.createElement('script');
+    s.src = url;
+    s.onerror = function() { if (fallback) loadEthers(fallback); };
+    document.head.appendChild(s);
+  }
+  loadEthers(
+    'https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js'
+  );
+})();
+</script>
 
 <!-- Reown AppKit (WalletConnect v2) -->
 <script type="module">
