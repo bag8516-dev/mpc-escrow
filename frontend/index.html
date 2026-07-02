@@ -1053,8 +1053,10 @@ async function showBuyerPage(tradeId) {
   });
   document.getElementById('pageBuy').classList.add('active');
 
-  // 탭바에 '구매' 탭 추가
-  document.getElementById('tabBar').innerHTML += `<div class="tab-item active" id="tab-buy"><span class="tab-icon">🛒</span><span>구매</span></div>`;
+  // 탭바에 '구매' 탭 추가 (중복 방지)
+  if (!document.getElementById('tab-buy')) {
+    document.getElementById('tabBar').innerHTML += `<div class="tab-item active" id="tab-buy"><span class="tab-icon">🛒</span><span>구매</span></div>`;
+  }
 
   try {
     const trade = await fetchTrade(tradeId);
@@ -1580,7 +1582,7 @@ async function getRemainingTime(tradeId) {
 async function checkPolBalance() {
   if (!window.__ethersProvider || !walletAddress) return true;
   const bal = await window.__ethersProvider.getBalance(walletAddress);
-  return bal.gt(ethers.utils.parseEther('0.001'));
+  return bal.gt(ethers.utils.parseEther('0.005'));
 }
 
 // ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
@@ -1637,19 +1639,22 @@ function showConfirm(title, body) {
     document.getElementById('modalConfirmBody').innerHTML = body;
     document.getElementById('modalConfirm').classList.add('show');
     const okBtn = document.getElementById('modalConfirmOk');
-    const handler = () => {
-      closeModal('modalConfirm');
+    const cancelBtn = document.querySelector('#modalConfirm .btn-outline');
+    const cleanup = () => {
       okBtn.removeEventListener('click', handler);
+      cancelBtn.removeEventListener('click', cancelHandler);
+    };
+    const handler = () => {
+      cleanup();
+      closeModal('modalConfirm');
       resolve(true);
     };
-    okBtn.addEventListener('click', handler);
-    // 취소 버튼은 closeModal 후 resolve(false) 필요
-    const cancelBtn = document.querySelector('#modalConfirm .btn-outline');
     const cancelHandler = () => {
+      cleanup();
       closeModal('modalConfirm');
-      cancelBtn.removeEventListener('click', cancelHandler);
       resolve(false);
     };
+    okBtn.addEventListener('click', handler);
     cancelBtn.addEventListener('click', cancelHandler);
   });
 }
