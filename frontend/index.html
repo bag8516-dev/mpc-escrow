@@ -438,12 +438,13 @@ a { color:var(--gold); text-decoration:none; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">🎉 거래가 생성됐습니다!</div>
-    <div style="color:var(--text2);font-size:14px;margin-bottom:12px">구매자에게 아래 링크를 카카오톡으로 전송해주세요.</div>
+    <div style="color:var(--text2);font-size:14px;margin-bottom:12px">아래 링크를 카카오톡으로 전송하세요.<br>구매자가 누르면 <strong style="color:var(--gold)">Trust Wallet이 바로 열립니다.</strong></div>
     <div class="link-box">
       <div class="link-input" id="shareUrl"></div>
       <button class="copy-btn" id="copyUrlBtn" onclick="copyShareUrl()">복사</button>
     </div>
-    <div class="warn-box" style="margin-top:12px">⏱ 10분 내에 구매자가 응답하지 않으면 자동으로 취소됩니다</div>
+    <div class="info-box" style="margin-top:10px;font-size:12px">📱 카카오톡에서 링크 클릭 → Trust Wallet 앱 자동 실행</div>
+    <div class="warn-box" style="margin-top:8px">⏱ 10분 내에 구매자가 응답하지 않으면 자동으로 취소됩니다</div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalShareLink')">확인</button>
   </div>
 </div>
@@ -919,9 +920,10 @@ async function createTradeFlow() {
       createdAt: Date.now(), status: 'PENDING', secret: secretHex
     });
 
-    // 8. 공유 링크 표시
-    const shareUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
-    document.getElementById('shareUrl').textContent = shareUrl;
+    // 8. 공유 링크 표시 (Trust Wallet 딥링크로 변환)
+    const pageUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
+    const deepLink = `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(pageUrl)}`;
+    document.getElementById('shareUrl').textContent = deepLink;
     document.getElementById('modalShareLink').classList.add('show');
 
     resetButton(btn, '거래 생성하기');
