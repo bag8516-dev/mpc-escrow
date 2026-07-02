@@ -298,15 +298,16 @@ a { color:var(--gold); text-decoration:none; }
       <div class="input-group">
         <label class="input-label">MPC 1개당 원화 가격</label>
         <div class="input-wrap">
-          <input type="number" id="sellPricePerMpc" placeholder="0" step="1" oninput="calcSell()">
+          <input type="number" id="sellPricePerMpc" placeholder="0" step="10" min="10" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 10, 20, 30...)</div>
       </div>
 
       <div class="input-group">
         <label class="input-label">1 USDT = 원화 (직접 입력)</label>
         <div class="input-wrap">
-          <input type="number" id="sellKrwPerUsdt" placeholder="" oninput="calcSell()">
+          <input type="number" id="sellKrwPerUsdt" placeholder="" step="10" min="10" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
       </div>
@@ -895,6 +896,16 @@ function calcSell() {
     if (btn) btn.disabled = true;
     return;
   }
+  if (pricePerMpc % 10 !== 0) {
+    showToast('MPC 단가는 10원 단위로 입력해주세요 (예: 10, 20, 30...)');
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (krwPerUsdt % 10 !== 0) {
+    showToast('USDT 환율은 10원 단위로 입력해주세요 (예: 1460, 1470...)');
+    if (btn) btn.disabled = true;
+    return;
+  }
 
   // 원화 기반 계산: MPC단가(원) × 수량 = 총원화 → ÷ USDT환율 = 받을USDT
   const totalKrw = mpcAmt * pricePerMpc;
@@ -938,6 +949,8 @@ async function createTradeFlow() {
   if (mpcAmt < CONFIG.MIN_MPC) { showError(`❌ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다.`); return; }
   if (pricePerMpc <= 0)  { showError('MPC 단가는 0보다 커야 합니다.'); return; }
   if (krwPerUsdt <= 0)   { showError('USDT 환율은 0보다 커야 합니다.'); return; }
+  if (pricePerMpc % 10 !== 0) { showError('❌ MPC 단가는 10원 단위로 입력해주세요.<br>예: 10, 20, 30...'); return; }
+  if (krwPerUsdt % 10 !== 0)  { showError('❌ USDT 환율은 10원 단위로 입력해주세요.<br>예: 1460, 1470...'); return; }
   if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
 
   // pricePerMpc는 원화 단가; 컨트랙트엔 USDT 단가 필요
