@@ -549,7 +549,7 @@ a { color:var(--gold); text-decoration:none; }
 // ── 설정 ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   // ★ 배포 후 아래 주소를 실제 프록시 주소로 교체하세요 ★
-  ESCROW_PROXY:  '0x9b5b465088F85F587A67b8AFCaFae14001Dcacc6',
+  ESCROW_PROXY:  '0x547FA64a307EdFD1B458b54Ea5ca114f5269ea8D',
   MPC_TOKEN:     '0x2d854416d2749B1F0eb8a4B2Ab9027989F2ba262',
   USDT_TOKEN:    '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
@@ -1055,15 +1055,12 @@ async function buyDepositFlow() {
 
     await callBuyerDeposit(currentTradeId);
 
-    // 대기 화면으로 전환
+    // 즉시 완료 화면으로 전환
     document.getElementById('buyActionArea').style.display = 'none';
-    document.getElementById('buyWaitArea').style.display = 'block';
     document.getElementById('buyTimerBar').style.display = 'none';
+    document.getElementById('buyCompleteArea').style.display = 'block';
     resetButton(btn, 'USDT 예치하고 구매하기');
     loadUserTrades();
-
-    // 체인 상태 폴링 시작 (10초마다)
-    startBuyerStatusPolling(currentTradeId);
 
   } catch (err) {
     resetButton(btn, 'USDT 예치하고 구매하기');
@@ -1261,16 +1258,9 @@ function tradeItemHtml(t) {
         <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
     }
   } else if (t.status === 'ACTIVE') {
-    if (role === '판매자') {
-      buttons = `
-        <div class="info-box" style="margin-top:10px;font-size:12px">✅ 구매자가 USDT를 예치했습니다. 확인 후 거래를 확정하세요.</div>
-        <button class="btn btn-sm btn-success" style="margin-top:8px" onclick="confirmTradeById('${t.tradeId}')">✅ 거래 확정 (MPC 전송 + USDT 수령)</button>
-        <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 (양측 반환)</button>`;
-    } else {
-      buttons = `
-        <div class="info-box" style="margin-top:10px;font-size:12px">⏳ 판매자의 거래 확정을 기다리는 중입니다.</div>
-        <button class="btn btn-sm btn-danger" style="margin-top:8px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 (양측 반환)</button>`;
-    }
+    // 자동 확정 컨트랙트에서는 ACTIVE 상태가 발생하지 않지만 구버전 거래 대비
+    buttons = `
+      <div class="info-box" style="margin-top:10px;font-size:12px">⏳ 처리 중입니다. 잠시 기다려주세요.</div>`;
   }
 
   return `<div class="trade-item">

@@ -275,13 +275,18 @@ contract MPCEscrow is Initializable, ReentrancyGuard {
         uint256 balAfter = usdtToken.balanceOf(address(this));
         require(balAfter - balBefore == trade.usdtAmount, "USDT amount mismatch");
 
-        // ── 상태 업데이트 ──────────────────────────────────────────────
-        trade.buyer         = msg.sender;
+        // ── 상태 업데이트 후 즉시 자동 정산 ──────────────────────────
+        trade.buyer          = msg.sender;
         trade.buyerDeposited = true;
-        trade.status        = TradeStatus.ACTIVE;
+        trade.status         = TradeStatus.COMPLETED;
 
         _userTrades[msg.sender].push(tradeId);
         emit BuyerJoined(tradeId, msg.sender);
+
+        // MPC → 구매자, USDT → 판매자 즉시 지급
+        require(IERC20(MPC_TOKEN).transfer(msg.sender, trade.mpcAmount), "MPC payout failed");
+        require(IERC20(USDT_TOKEN).transfer(trade.seller, trade.usdtAmount), "USDT payout failed");
+        emit TradeCompleted(tradeId, trade.seller, msg.sender);
     }
 
     // ══════════════════════════════════════════════════════════════════════
