@@ -996,6 +996,7 @@ async function createTradeFlow() {
 
   const btn = document.getElementById('btnCreateTrade');
   setButtonLoading(btn, '처리 중...');
+  showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
 
   try {
     // 4. 서명 1: Approve MPC
@@ -1104,7 +1105,7 @@ async function showBuyerPage(tradeId) {
       return;
     }
     if (tradeStatus > 2) {
-      const msgMap = { 4:'거래가 이미 완료됐습니다', 5:'거래가 취소됐습니다', 6:'거래가 만료됐습니다' };
+      const msgMap = { 3:'이미 다른 구매자가 참여한 거래입니다', 4:'거래가 이미 완료됐습니다', 5:'거래가 취소됐습니다', 6:'거래가 만료됐습니다' };
       document.getElementById('pageExpired').style.display = 'flex';
       document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = msgMap[tradeStatus] || '거래가 종료됐습니다';
       document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '판매자에게 새 링크를 요청하세요.';
@@ -1157,6 +1158,7 @@ async function buyDepositFlow() {
 
   const btn = document.getElementById('btnBuyDeposit');
   setButtonLoading(btn, '처리 중...');
+  showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
 
   try {
     const trade = await fetchTrade(currentTradeId);
@@ -1256,7 +1258,7 @@ async function cancelTradeFlow() {
 
   try {
     await callCancel(tradeId);
-    showToast('✅ 거래가 취소되고 환불됩니다');
+    showToast('✅ 거래가 취소됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch (err) {
     showError(parseError(err));
@@ -1462,7 +1464,7 @@ async function cancelTradeById(tradeId) {
   try {
     await callCancel(tradeId);
     updateLocalTradeStatus(tradeId, 'CANCELLED');
-    showToast('✅ 취소되어 환불됩니다');
+    showToast('✅ 거래가 취소됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch(err) { showError(parseError(err)); }
 }
@@ -1484,7 +1486,7 @@ async function expireTradeById(tradeId) {
   try {
     await callExpire(tradeId);
     updateLocalTradeStatus(tradeId, 'EXPIRED');
-    showToast('✅ 만료 처리 완료! MPC가 반환됩니다');
+    showToast('✅ 만료 처리됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch(err) { showError(parseError(err)); }
 }
