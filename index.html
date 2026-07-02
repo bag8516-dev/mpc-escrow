@@ -1050,7 +1050,7 @@ async function buyDepositFlow() {
       '2번째 서명 안내 (USDT 전송)',
       `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>USDT 전송</strong> 요청이 표시됩니다</div></div>
        <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로 컨트랙트로 USDT가 예치됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">판매자가 확정하면 MPC가 자동 지급됩니다</div></div>`
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">예치 즉시 MPC가 자동으로 지갑에 전송됩니다</div></div>`
     );
 
     await callBuyerDeposit(currentTradeId);
@@ -1494,12 +1494,21 @@ function showAddrConfirm(addr) {
       `<span class="hi">${addr.slice(0,6)}</span>${addr.slice(6,-4)}<span class="hi">${addr.slice(-4)}</span>`;
     document.getElementById('modalAddrConfirm').classList.add('show');
     const okBtn = document.getElementById('addrConfirmOk');
-    const handler = () => {
+    const cancelBtn = document.querySelector('#modalAddrConfirm .btn-outline');
+    const okHandler = () => {
       closeModal('modalAddrConfirm');
-      okBtn.removeEventListener('click', handler);
+      okBtn.removeEventListener('click', okHandler);
+      cancelBtn.removeEventListener('click', cancelHandler);
       resolve(true);
     };
-    okBtn.addEventListener('click', handler);
+    const cancelHandler = () => {
+      closeModal('modalAddrConfirm');
+      okBtn.removeEventListener('click', okHandler);
+      cancelBtn.removeEventListener('click', cancelHandler);
+      resolve(false);
+    };
+    okBtn.addEventListener('click', okHandler);
+    cancelBtn.addEventListener('click', cancelHandler);
   });
 }
 
