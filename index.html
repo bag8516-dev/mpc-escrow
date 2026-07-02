@@ -535,6 +535,7 @@ a { color:var(--gold); text-decoration:none; }
   <div style="font-size:60px">⌛</div>
   <div style="font-size:20px;font-weight:800">거래가 만료됐습니다</div>
   <div style="color:var(--text2);font-size:15px;line-height:1.7">판매자에게 새 링크를 요청해주세요.<br>거래는 생성 후 10분간만 유효합니다.</div>
+  <button class="btn btn-outline btn-sm" onclick="location.reload()" style="margin-top:8px">🔄 다시 시도</button>
 </div>
 
 <!-- 토스트 -->
@@ -742,6 +743,7 @@ function initContractsEthers() {
     'function getTrade(bytes32 tradeId) view returns (address seller, address buyer, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 usdtAmount, uint256 krwPerUsdt, uint256 createdAt, uint256 sellerDepositBlock, uint8 status, bool sellerDeposited, bool buyerDeposited, bytes32 commitHash)',
     'function getUserTrades(address user) view returns (bytes32[])',
     'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
+    'event TradeCommitted(bytes32 indexed tradeId, address indexed seller, bytes32 commitHash)',
   ];
   escrowContract = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, window.__ethersSigner);
   mpcContract    = new ethers.Contract(CONFIG.MPC_TOKEN,    ERC20_ABI,  window.__ethersSigner);
@@ -975,14 +977,32 @@ async function showBuyerPage(tradeId) {
 
   try {
     const trade = await fetchTrade(tradeId);
-    if (!trade || trade.status === 0) {
-      showExpiredPage(); return;
-    }
-    // PENDING 아닌 경우
-    const statusNames = ['없음','커밋','대기 중','진행 중','완료','취소','만료'];
-    if (trade.status > 2) {
-      document.getElementById('pageExpired').style.display = 'flex';
+    if (!trade) {
+      // 거래 로드 실패 (네트워크 오류 또는 잘못된 거래 ID)
       document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래를 불러올 수 없습니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '네트워크 오류이거나 유효하지 않은 링크입니다.<br>판매자에게 링크를 다시 받거나, 잠시 후 다시 시도해주세요.';
+      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
+      return;
+    }
+    const tradeStatus = Number(trade.status);
+    if (tradeStatus === 0) {
+      // 거래가 이 컨트랙트에 존재하지 않음
+      document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래를 찾을 수 없습니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '링크가 만료됐거나 잘못된 링크입니다.<br>판매자에게 새 링크를 요청하세요.';
+      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
+      return;
+    }
+    if (tradeStatus > 2) {
+      const msgMap = { 4:'거래가 이미 완료됐습니다', 5:'거래가 취소됐습니다', 6:'거래가 만료됐습니다' };
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = msgMap[tradeStatus] || '거래가 종료됐습니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '판매자에게 새 링크를 요청하세요.';
+      document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
       return;
     }
 
