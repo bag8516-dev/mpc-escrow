@@ -1298,8 +1298,11 @@ async function loadUserTrades() {
 
 async function recoverTradesFromChain() {
   try {
-    const tradeIds = await escrowContract.getUserTrades(walletAddress);
-    if (!tradeIds || tradeIds.length === 0) return;
+    const allIds = await escrowContract.getUserTrades(walletAddress);
+    if (!allIds || allIds.length === 0) return;
+
+    // 최근 50건만 복구 (누적 시 성능 보호)
+    const tradeIds = allIds.slice(-50);
 
     const local = getLocalTrades();
     let changed = false;
@@ -1362,7 +1365,10 @@ function renderHistoryList(trades) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">거래 내역이 없습니다</div>';
     return;
   }
-  el.innerHTML = all.map(t => tradeItemHtml(t)).join('');
+  // 최근 50건만 표시 (누적 시 DOM 성능 보호)
+  const display = all.slice(0, 50);
+  const more = all.length > 50 ? `<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">최근 50건만 표시됩니다 (전체 ${all.length}건)</div>` : '';
+  el.innerHTML = display.map(t => tradeItemHtml(t)).join('') + more;
 }
 
 function tradeItemHtml(t) {
