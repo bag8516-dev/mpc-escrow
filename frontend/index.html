@@ -625,10 +625,13 @@ function detectEnvironment() {
 function setDeviceGuide() {
   const ua = navigator.userAgent;
   const el = document.getElementById('deviceGuide');
-  if (/iPhone|iPad/i.test(ua)) {
-    el.textContent = '🍎 아이폰은 Safari 또는 Chrome 브라우저에서 접속해주세요.';
+  const isTrustWallet = /Trust\/|TrustWallet/i.test(ua);
+  if (isTrustWallet) {
+    el.textContent = '✅ Trust Wallet 브라우저가 감지됐습니다. 아래 버튼을 눌러 연결하세요.';
+  } else if (/iPhone|iPad/i.test(ua)) {
+    el.textContent = '🍎 Trust Wallet 앱 → 탐색 탭에서 접속해주세요.';
   } else if (/Android/i.test(ua)) {
-    el.textContent = '📱 안드로이드는 Chrome 또는 삼성 인터넷에서 접속해주세요.';
+    el.textContent = '📱 Trust Wallet 앱 → 탐색 탭에서 접속해주세요.';
   }
 }
 
