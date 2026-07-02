@@ -1178,14 +1178,20 @@ async function loadUserTrades() {
   // 체인에서 내 거래 복구 (localStorage 분실 대비)
   await recoverTradesFromChain();
 
-  // 진행 중 거래는 체인 상태와 동기화
+  // 진행 중 거래를 체인 상태와 동기화
+  // ★ 동시 실행(Promise.all) 대신 순차 실행 → localStorage 덮어쓰기 방지
   const active = Object.values(getLocalTrades()).filter(t => t.status === 'PENDING' || t.status === 'ACTIVE');
   if (active.length > 0) {
-    await Promise.all(active.map(t => syncTradeStatusFromChain(t.tradeId)));
+    for (const t of active) {
+      await syncTradeStatusFromChain(t.tradeId);
+    }
     const synced = getLocalTrades();
     renderStatusList(synced);
     renderHistoryList(synced);
   }
+
+  // 진행 중 거래가 있으면 카운트다운 실시간 업데이트 시작
+  startStatusCountdown();
 }
 
 async function recoverTradesFromChain() {
@@ -1279,7 +1285,7 @@ function tradeItemHtml(t) {
       buttons = `<button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="expireTradeById('${t.tradeId}')">⏰ 만료 처리 및 MPC 반환</button>`;
     } else {
       buttons = `
-        <div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ 만료까지 ${remainMin}분 ${remainSec}초</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px" data-countdown="${t.createdAt}">⏱ 만료까지 ${remainMin}분 ${remainSec}초</div>
         <button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="copyTradeLink('${t.tradeId}')">🔗 구매자 링크 다시 복사</button>
         <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
     }
@@ -1352,24 +1358,52 @@ async function expireTradeById(tradeId) {
 }
 
 // 체인에서 실제 거래 상태 동기화
+// ★ localStorage를 한 번만 읽고 한 번만 씀 → 동시 실행 시 덮어쓰기 방지
 async function syncTradeStatusFromChain(tradeId) {
   try {
     const onChain = await fetchTrade(tradeId);
     if (!onChain) return;
     const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
     const chainStatus = statusArr[Number(onChain.status)] || null;
-    if (chainStatus && chainStatus !== 'NONE') {
-      updateLocalTradeStatus(tradeId, chainStatus);
-      // ACTIVE 상태면 구매자 주소도 업데이트
-      if (chainStatus === 'ACTIVE' && onChain.buyer) {
-        const trades = getLocalTrades();
-        if (trades[tradeId]) {
-          trades[tradeId].buyer = onChain.buyer;
-          saveLocalTrades(trades);
-        }
-      }
+    if (!chainStatus || chainStatus === 'NONE') return;
+
+    // localStorage를 한 번에 읽고 한 번에 저장
+    const trades = getLocalTrades();
+    if (!trades[tradeId]) return;
+    trades[tradeId].status = chainStatus;
+    if (onChain.buyer && onChain.buyer !== '0x0000000000000000000000000000000000000000') {
+      trades[tradeId].buyer = onChain.buyer;
     }
+    saveLocalTrades(trades);
   } catch(e) {}
+}
+
+// ── 진행 중 탭 카운트다운 실시간 업데이트 ────────────────────────────────
+let statusCountdownInterval = null;
+function startStatusCountdown() {
+  if (statusCountdownInterval) clearInterval(statusCountdownInterval);
+
+  // PENDING 거래가 없으면 시작 안 함
+  const trades = getLocalTrades();
+  const hasPending = Object.values(trades).some(t => t.status === 'PENDING');
+  if (!hasPending) return;
+
+  statusCountdownInterval = setInterval(() => {
+    const now = Date.now();
+    // 진행 중 탭의 카운트다운 텍스트 요소만 업데이트
+    document.querySelectorAll('[data-countdown]').forEach(el => {
+      const createdAt = Number(el.dataset.countdown);
+      const remainMs = Math.max(0, (createdAt + CONFIG.TRADE_TIMEOUT * 1000) - now);
+      if (remainMs === 0) {
+        el.textContent = '⏰ 만료됨 - 만료 처리 버튼을 눌러주세요';
+        el.style.color = 'var(--danger)';
+      } else {
+        const min = Math.floor(remainMs / 60000);
+        const sec = Math.floor((remainMs % 60000) / 1000);
+        el.textContent = `⏱ 만료까지 ${min}분 ${sec}초`;
+      }
+    });
+  }, 1000);
 }
 
 // ── 스마트 컨트랙트 호출 (ethers.js + Reown AppKit) ───────────────────────
