@@ -712,6 +712,7 @@ function initContractsEthers() {
     'function buyerDeposit(bytes32 tradeId)',
     'function confirmTrade(bytes32 tradeId)',
     'function cancelTrade(bytes32 tradeId)',
+    'function expireTrade(bytes32 tradeId)',
     'function getTrade(bytes32 tradeId) view returns (address seller, address buyer, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 usdtAmount, uint256 krwPerUsdt, uint256 createdAt, uint256 sellerDepositBlock, uint8 status, bool sellerDeposited, bool buyerDeposited, bytes32 commitHash)',
     'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
   ];
@@ -1038,8 +1039,8 @@ async function buyDepositFlow() {
 
 // ── 취소 플로우 ────────────────────────────────────────────────────────────
 async function cancelTradeFlow() {
-  const tradeId = currentTradeId || (await selectActiveTrade());
-  if (!tradeId) return;
+  const tradeId = currentTradeId;
+  if (!tradeId) { showError('거래 ID를 찾을 수 없습니다.'); return; }
 
   const ok = await showConfirm('거래 취소', '거래를 취소하면 양측 모두 즉시 환불됩니다.<br>취소하시겠습니까?');
   if (!ok) return;
@@ -1314,9 +1315,12 @@ function saveTrade(tradeId, data) {
   trades[tradeId] = data;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
 }
+function saveLocalTrades(trades) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
+}
 function updateLocalTradeStatus(tradeId, status) {
   const trades = getLocalTrades();
-  if (trades[tradeId]) { trades[tradeId].status = status; localStorage.setItem(STORAGE_KEY, JSON.stringify(trades)); }
+  if (trades[tradeId]) { trades[tradeId].status = status; saveLocalTrades(trades); }
 }
 function loadLocalTrades() { pendingTrades = getLocalTrades(); }
 
