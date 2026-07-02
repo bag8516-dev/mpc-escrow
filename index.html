@@ -860,6 +860,15 @@ async function createTradeFlow() {
   const hasGas = await checkPolBalance();
   if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
 
+  // 2-1. MPC 잔액 확인
+  const mpcBalance = await mpcContract.balanceOf(walletAddress);
+  const mpcNeeded = bigIntMpc(mpcAmt);
+  if (mpcBalance.lt(mpcNeeded)) {
+    const have = parseFloat(ethers.utils.formatUnits(mpcBalance, 18)).toFixed(2);
+    showError(`❌ MPC 잔액 부족<br><br>필요: ${mpcAmt.toLocaleString()} MPC<br>보유: ${have} MPC<br><br>판매할 MPC를 지갑에 먼저 입금해주세요.`);
+    return;
+  }
+
   // 3. 지갑 주소 확인
   const addrOk = await showAddrConfirm(walletAddress);
   if (!addrOk) return;
