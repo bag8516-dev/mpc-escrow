@@ -397,12 +397,13 @@ async function loadTxList() {
       return;
     }
 
-    // 모든 tx 조회 (미실행만 표시)
+    // 최근 30건만 조회 (누적 시 성능 보호)
     const escrowIface = new ethers.utils.Interface(ESCROW_ADMIN_ABI);
     let html = '';
     let pendingCount = 0;
+    const startIdx = Math.max(0, count - 30);
 
-    for (let i = count - 1; i >= 0; i--) {
+    for (let i = count - 1; i >= startIdx; i--) {
       const [to, , data, executed, confirmations] = await msRead.getTransaction(i);
       if (executed) continue; // 이미 실행된 것은 건너뜀
       pendingCount++;
