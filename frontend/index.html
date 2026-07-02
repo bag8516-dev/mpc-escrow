@@ -634,71 +634,27 @@ function setDeviceGuide() {
 
 // ── 지갑 연결 ──────────────────────────────────────────────────────────────
 async function connectWallet() {
-  const btn = document.getElementById('btnConnect');
-  setButtonLoading(btn, '연결 중...');
-
-  try {
-    // WalletConnect v2 (ethers.js 없이 window.ethereum 또는 WC 사용)
-    // 실제 배포 시 WalletConnect SDK 로드 필요
-    // 여기서는 window.ethereum (Trust Wallet 내장 브라우저 또는 WC 주입) 사용
-    if (typeof window.ethereum === 'undefined') {
-      // Trust Wallet 딥링크로 열기
-      openTrustWalletDeepLink();
-      resetButton(btn, '🔗 지갑 연결하기');
-      return;
-    }
-
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    if (!accounts || accounts.length === 0) throw new Error('지갑 연결이 거부됐습니다');
-
-    walletAddress = accounts[0];
-
-    // 네트워크 확인 및 자동 전환
-    await ensurePolygonNetwork();
-
-    // ethers.js 없이 간단한 provider wrapper
-    await initContracts();
-
-    // UI 전환
-    onWalletConnected();
-
-  } catch (err) {
-    resetButton(btn, '🔗 지갑 연결하기');
-    if (err.message && err.message.includes('version')) {
-      document.getElementById('modalTrustVersion').classList.add('show');
-    } else {
-      showError(parseError(err));
-    }
+  if (!window.__appKit) {
+    showError('지갑 SDK가 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
   }
-}
-
-function openTrustWalletDeepLink() {
-  const url = encodeURIComponent(window.location.href);
-  const deepLink = `trust://open_url?coin_id=966&url=${url}`;
-  window.location.href = deepLink;
-  // fallback: 앱스토어
-  setTimeout(() => {
-    const ua = navigator.userAgent;
-    if (/iPhone|iPad/i.test(ua)) {
-      window.location.href = 'https://apps.apple.com/app/trust-crypto-bitcoin-wallet/id1288339409';
-    } else {
-      window.location.href = 'https://play.google.com/store/apps/details?id=com.wallet.crypto.trustapp';
-    }
-  }, 2000);
+  window.__appKit.open();
 }
 
 async function ensurePolygonNetwork() {
-  const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-  const chainId = parseInt(chainIdHex, 16);
-  if (chainId !== CONFIG.CHAIN_ID) {
+  if (!window.__ethersProvider) return;
+  const network = await window.__ethersProvider.getNetwork();
+  if (network.chainId !== CONFIG.CHAIN_ID) {
     try {
-      await window.ethereum.request({
+      await window.__ethersProvider.provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: '0x' + CONFIG.CHAIN_ID.toString(16) }],
       });
+      window.__ethersProvider = new ethers.providers.Web3Provider(window.__ethersProvider.provider);
+      window.__ethersSigner = window.__ethersProvider.getSigner();
     } catch (switchErr) {
       if (switchErr.code === 4902) {
-        await window.ethereum.request({
+        await window.__ethersProvider.provider.request({
           method: 'wallet_addEthereumChain',
           params: [{
             chainId: '0x' + CONFIG.CHAIN_ID.toString(16),
@@ -713,12 +669,23 @@ async function ensurePolygonNetwork() {
   }
 }
 
-async function initContracts() {
-  // 간단한 RPC 호출 래퍼 (ethers 없이)
-  // 실제 배포 시 ethers.js CDN 포함 권장
-  escrowContract = { address: CONFIG.ESCROW_PROXY };
-  mpcContract   = { address: CONFIG.MPC_TOKEN };
-  usdtContract  = { address: CONFIG.USDT_TOKEN };
+function initContractsEthers() {
+  const ERC20_ABI = [
+    'function approve(address spender, uint256 amount) returns (bool)',
+    'function balanceOf(address owner) view returns (uint256)',
+  ];
+  const ESCROW_ABI = [
+    'function commitTrade(bytes32 commitHash) returns (bytes32)',
+    'function revealAndDeposit(bytes32 tradeId, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 krwPerUsdt, bytes32 secret)',
+    'function buyerDeposit(bytes32 tradeId)',
+    'function confirmTrade(bytes32 tradeId)',
+    'function cancelTrade(bytes32 tradeId)',
+    'function getTrade(bytes32 tradeId) view returns (address seller, address buyer, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 usdtAmount, uint256 krwPerUsdt, uint256 createdAt, uint256 sellerDepositBlock, uint8 status, bool sellerDeposited, bool buyerDeposited, bytes32 commitHash)',
+    'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
+  ];
+  escrowContract = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, window.__ethersSigner);
+  mpcContract    = new ethers.Contract(CONFIG.MPC_TOKEN,    ERC20_ABI,  window.__ethersSigner);
+  usdtContract   = new ethers.Contract(CONFIG.USDT_TOKEN,   ERC20_ABI,  window.__ethersSigner);
 }
 
 function onWalletConnected() {
@@ -744,12 +711,11 @@ function onWalletConnected() {
   // 거래 목록 갱신
   loadUserTrades();
 
-  // 계정 변경 감지
-  window.ethereum.on('accountsChanged', accounts => {
-    if (accounts.length === 0) location.reload();
-    else { walletAddress = accounts[0]; onWalletConnected(); }
+  // 계정/네트워크 변경 감지
+  window.__appKit.subscribeAccount(({ address, isConnected }) => {
+    if (!isConnected) location.reload();
+    else if (address && address !== walletAddress) { walletAddress = address; onWalletConnected(); }
   });
-  window.ethereum.on('chainChanged', () => location.reload());
 }
 
 // ── 탭 전환 ───────────────────────────────────────────────────────────────
@@ -891,7 +857,7 @@ async function createTradeFlow() {
 
     const mpcWei         = mpcAmountWei;
     const priceWei       = bigIntUsdt(pricePerMpc);   // 6 decimals
-    const krwInt         = BigInt(Math.round(krwPerUsdt));
+    const krwInt         = ethers.BigNumber.from(Math.round(krwPerUsdt));
     const commitHash     = await calcCommitHash(secretHex, mpcWei, priceWei, krwInt);
 
     const tradeId = await callCommitTrade(commitHash);
@@ -998,7 +964,7 @@ async function buyDepositFlow() {
 
   try {
     const trade = await fetchTrade(currentTradeId);
-    const usdtAmt = BigInt(trade.usdtAmount);
+    const usdtAmt = ethers.BigNumber.from(trade.usdtAmount);
 
     // 서명 1: Approve USDT
     await showSignGuide(
@@ -1155,145 +1121,75 @@ async function confirmTradeById(tradeId) {
   } catch(err) { showError(parseError(err)); }
 }
 
-// ── 스마트 컨트랙트 호출 (window.ethereum 직접 사용) ──────────────────────
-// 실제 배포 시 ethers.js 또는 viem 사용 권장
-
-async function sendTx(to, data) {
-  const tx = await window.ethereum.request({
-    method: 'eth_sendTransaction',
-    params: [{ from: walletAddress, to, data, gas: '0x' + (300000).toString(16) }],
-  });
-  return waitForReceipt(tx);
-}
-
-async function waitForReceipt(txHash) {
-  for (let i = 0; i < 60; i++) {
-    const receipt = await window.ethereum.request({
-      method: 'eth_getTransactionReceipt', params: [txHash],
-    });
-    if (receipt) {
-      if (receipt.status === '0x0') throw new Error('트랜잭션 실패');
-      return receipt;
-    }
-    await sleep(2000);
-  }
-  throw new Error('트랜잭션 확인 시간 초과');
-}
-
-async function callRpc(method, params) {
-  return window.ethereum.request({ method, params });
-}
-
-function encodeUint256(n) {
-  return BigInt(n).toString(16).padStart(64,'0');
-}
-function encodeBytes32(hex) {
-  return hex.replace('0x','').padEnd(64,'0');
-}
-function encodeAddress(addr) {
-  return addr.replace('0x','').toLowerCase().padStart(64,'0');
-}
-
-// selector helpers (keccak256 선택자 직접 하드코딩 – Solidity 시그니처 기반)
-const SEL = {
-  approve:           '0x095ea7b3',
-  commitTrade:       '0x00000001', // placeholder – deploy 후 실제 선택자로 교체
-  revealAndDeposit:  '0x00000002',
-  buyerDeposit:      '0x00000003',
-  confirmTrade:      '0x00000004',
-  cancelTrade:       '0x00000005',
-  getTrade:          '0x00000006',
-  getRemainingTime:  '0x00000007',
-};
-// NOTE: 실제 선택자는 컨트랙트 배포 후 ABI에서 자동 계산됩니다.
-// 프로덕션에서는 ethers.js Interface로 인코딩하세요:
-//   const iface = new ethers.Interface(ESCROW_ABI);
-//   const data = iface.encodeFunctionData('commitTrade', [commitHash]);
+// ── 스마트 컨트랙트 호출 (ethers.js + Reown AppKit) ───────────────────────
 
 async function approveMpc(amount) {
-  const data = SEL.approve + encodeAddress(CONFIG.ESCROW_PROXY) + encodeUint256(amount);
-  return sendTx(CONFIG.MPC_TOKEN, data);
+  const tx = await mpcContract.approve(CONFIG.ESCROW_PROXY, amount);
+  return tx.wait();
 }
 async function approveUsdt(amount) {
-  const data = SEL.approve + encodeAddress(CONFIG.ESCROW_PROXY) + encodeUint256(amount);
-  return sendTx(CONFIG.USDT_TOKEN, data);
+  const tx = await usdtContract.approve(CONFIG.ESCROW_PROXY, amount);
+  return tx.wait();
 }
 async function callCommitTrade(commitHash) {
-  const data = SEL.commitTrade + encodeBytes32(commitHash);
-  const receipt = await sendTx(CONFIG.ESCROW_PROXY, data);
-  // 로그에서 tradeId 파싱
-  return receipt.logs?.[0]?.topics?.[1] || '0x' + '0'.repeat(64);
+  const tx = await escrowContract.commitTrade(commitHash);
+  const receipt = await tx.wait();
+  // TradeCommitted 이벤트에서 tradeId 파싱
+  const event = receipt.events?.find(e => e.event === 'TradeCommitted');
+  return event?.args?.tradeId || receipt.logs?.[0]?.topics?.[1];
 }
 async function callRevealAndDeposit(tradeId, mpcAmt, price, krw, secret) {
-  const data = SEL.revealAndDeposit +
-    encodeBytes32(tradeId) + encodeUint256(mpcAmt) + encodeUint256(price) +
-    encodeUint256(krw) + encodeBytes32(secret);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.revealAndDeposit(tradeId, mpcAmt, price, krw, secret);
+  return tx.wait();
 }
 async function callBuyerDeposit(tradeId) {
-  const data = SEL.buyerDeposit + encodeBytes32(tradeId);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.buyerDeposit(tradeId);
+  return tx.wait();
 }
 async function callConfirm(tradeId) {
-  const data = SEL.confirmTrade + encodeBytes32(tradeId);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.confirmTrade(tradeId);
+  return tx.wait();
 }
 async function callCancel(tradeId) {
-  const data = SEL.cancelTrade + encodeBytes32(tradeId);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.cancelTrade(tradeId);
+  return tx.wait();
 }
 async function fetchTrade(tradeId) {
-  const data = SEL.getTrade + encodeBytes32(tradeId);
-  const res = await callRpc('eth_call', [{ to: CONFIG.ESCROW_PROXY, data }, 'latest']);
-  if (!res || res === '0x') return null;
-  // 간단 파싱 (실제 배포 시 ethers.js decodeFunctionResult 사용)
-  return parseTrade(res);
+  if (!escrowContract) return null;
+  try {
+    const t = await escrowContract.getTrade(tradeId);
+    return {
+      seller: t.seller, buyer: t.buyer,
+      mpcAmount: t.mpcAmount, usdtPricePerMPC: t.usdtPricePerMPC,
+      usdtAmount: t.usdtAmount, krwPerUsdt: t.krwPerUsdt,
+      createdAt: t.createdAt, status: t.status,
+    };
+  } catch { return null; }
 }
 async function getRemainingTime(tradeId) {
-  const data = SEL.getRemainingTime + encodeBytes32(tradeId);
-  const res = await callRpc('eth_call', [{ to: CONFIG.ESCROW_PROXY, data }, 'latest']);
-  return res ? parseInt(res, 16) : 0;
-}
-function parseTrade(hex) {
-  // 실제 배포 시 ethers.js로 대체
-  const raw = hex.replace('0x','');
-  return {
-    seller:            '0x' + raw.slice(24,64),
-    buyer:             '0x' + raw.slice(88,128),
-    mpcAmount:         BigInt('0x' + raw.slice(128,192) || '0'),
-    usdtPricePerMPC:   BigInt('0x' + raw.slice(192,256) || '0'),
-    usdtAmount:        BigInt('0x' + raw.slice(256,320) || '0'),
-    krwPerUsdt:        BigInt('0x' + raw.slice(320,384) || '0'),
-    createdAt:         parseInt(raw.slice(384,448), 16),
-    status:            parseInt(raw.slice(512,576), 16),
-  };
-}
-
-async function checkPolBalance() {
+  if (!escrowContract) return 0;
   try {
-    const bal = await callRpc('eth_getBalance', [walletAddress, 'latest']);
-    const balPol = parseInt(bal, 16) / 1e18;
-    return balPol >= CONFIG.MIN_POL_GAS;
-  } catch { return true; }
+    const r = await escrowContract.getRemainingTime(tradeId);
+    return r.toNumber();
+  } catch { return 0; }
+}
+async function checkPolBalance() {
+  if (!window.__ethersProvider || !walletAddress) return true;
+  const bal = await window.__ethersProvider.getBalance(walletAddress);
+  return bal.gt(ethers.utils.parseEther('0.001'));
 }
 
-// ── commit hash 계산 ──────────────────────────────────────────────────────
-async function calcCommitHash(secret, mpcWei, priceWei, krwBig) {
-  // keccak256(abi.encodePacked(secret, mpcAmount, usdtPricePerMPC, krwPerUsdt))
-  // 브라우저에서 SubtleCrypto로 keccak256은 지원 안 됨 → js-sha3 필요
-  // 실제 배포 시 ethers.utils.solidityKeccak256 사용:
-  //   return ethers.solidityPackedKeccak256(['bytes32','uint256','uint256','uint256'],[secret,mpcWei,priceWei,krwBig])
-  // 여기서는 placeholder
-  const encoder = new TextEncoder();
-  const combined = secret + mpcWei.toString(16).padStart(64,'0') + priceWei.toString(16).padStart(64,'0') + krwBig.toString(16).padStart(64,'0');
-  const buf = encoder.encode(combined);
-  const hash = await crypto.subtle.digest('SHA-256', buf); // SHA-256 (배포 시 keccak256으로 변경)
-  return '0x' + Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+// ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
+function calcCommitHash(secret, mpcWei, priceWei, krwBig) {
+  return ethers.utils.solidityKeccak256(
+    ['bytes32', 'uint256', 'uint256', 'uint256'],
+    [secret, mpcWei, priceWei, krwBig]
+  );
 }
 
 // ── 숫자 변환 헬퍼 ────────────────────────────────────────────────────────
-function bigIntMpc(n)  { return BigInt(Math.round(n * 1e18)); }
-function bigIntUsdt(n) { return BigInt(Math.round(n * 1e6)); }
+function bigIntMpc(n)  { return ethers.utils.parseUnits(n.toString(), 18); }
+function bigIntUsdt(n) { return ethers.utils.parseUnits(n.toFixed(6), 6); }
 
 // ── localStorage ──────────────────────────────────────────────────────────
 const STORAGE_KEY = 'mpc_escrow_trades';
@@ -1422,10 +1318,54 @@ function parseError(err) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 </script>
 
-<!-- ethers.js CDN (프로덕션 권장) -->
-<!-- <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script> -->
+<!-- ethers.js v5 -->
+<script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
 
-<!-- WalletConnect v2 CDN (프로덕션 필수) -->
-<!-- <script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script> -->
+<!-- Reown AppKit (WalletConnect v2) -->
+<script type="module">
+  import { createAppKit } from 'https://esm.sh/@reown/appkit@1.6.8';
+  import { EthersAdapter } from 'https://esm.sh/@reown/appkit-adapter-ethers@1.6.8';
+  import { defineChain } from 'https://esm.sh/@reown/appkit/networks';
+
+  const polygon = defineChain({
+    id: 137,
+    name: 'Polygon',
+    nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+    rpcUrls: { default: { http: ['https://polygon-bor-rpc.publicnode.com'] } },
+    blockExplorers: { default: { name: 'Polygonscan', url: 'https://polygonscan.com' } },
+  });
+
+  const ethersAdapter = new EthersAdapter();
+
+  const metadata = {
+    name: 'MPC 에스크로',
+    description: 'MPC P2P 에스크로 - Polygon',
+    url: window.location.origin,
+    icons: [],
+  };
+
+  window.__appKit = createAppKit({
+    adapters: [ethersAdapter],
+    networks: [polygon],
+    defaultNetwork: polygon,
+    metadata,
+    projectId: CONFIG.WC_PROJECT_ID,
+    features: { analytics: false, email: false, socials: false },
+    themeMode: 'dark',
+    themeVariables: { '--w3m-accent': '#C9A84C', '--w3m-border-radius-master': '12px' },
+  });
+
+  // 연결 상태 구독
+  window.__appKit.subscribeProvider(async (state) => {
+    if (state.isConnected && state.address && state.provider) {
+      walletAddress = state.address;
+      window.__ethersProvider = new ethers.providers.Web3Provider(state.provider);
+      window.__ethersSigner = window.__ethersProvider.getSigner();
+      await ensurePolygonNetwork();
+      initContractsEthers();
+      onWalletConnected();
+    }
+  });
+</script>
 </body>
 </html>
