@@ -743,11 +743,7 @@ function onWalletConnected() {
   // 거래 목록 갱신
   loadUserTrades();
 
-  // 계정/네트워크 변경 감지
-  window.__appKit.subscribeAccount(({ address, isConnected }) => {
-    if (!isConnected) location.reload();
-    else if (address && address !== walletAddress) { walletAddress = address; onWalletConnected(); }
-  });
+  // 계정/네트워크 변경 감지 (window.ethereum 이벤트로 처리됨)
 }
 
 // ── 탭 전환 ───────────────────────────────────────────────────────────────
