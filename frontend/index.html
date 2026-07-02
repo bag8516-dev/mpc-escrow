@@ -578,6 +578,7 @@ const CONFIG = {
   KAKAO_CHANNEL: 'http://pf.kakao.com/_HCKbX',
   OFFICIAL_URL:  window.location.hostname,
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
+  MIN_MPC:       100,
   MAX_MPC:       100000,
   TRADE_TIMEOUT: 600,    // 10분 (초)
   RATE_INTERVAL: 300000, // 5분 (ms)
@@ -884,6 +885,11 @@ function calcSell() {
     return;
   }
 
+  if (mpcAmt < CONFIG.MIN_MPC) {
+    showToast(`최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다`);
+    if (btn) btn.disabled = true;
+    return;
+  }
   if (mpcAmt > CONFIG.MAX_MPC) {
     showToast('최대 거래 한도는 10만 MPC입니다');
     if (btn) btn.disabled = true;
@@ -929,6 +935,7 @@ async function createTradeFlow() {
 
   if (!mpcAmt || !pricePerMpc || !krwPerUsdt) { showToast('모든 항목을 입력해주세요'); return; }
   if (mpcAmt <= 0)       { showError('MPC 수량은 0보다 커야 합니다.'); return; }
+  if (mpcAmt < CONFIG.MIN_MPC) { showError(`❌ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다.`); return; }
   if (pricePerMpc <= 0)  { showError('MPC 단가는 0보다 커야 합니다.'); return; }
   if (krwPerUsdt <= 0)   { showError('USDT 환율은 0보다 커야 합니다.'); return; }
   if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
