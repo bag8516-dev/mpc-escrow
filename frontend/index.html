@@ -740,6 +740,7 @@ function initContractsEthers() {
     'function cancelTrade(bytes32 tradeId)',
     'function expireTrade(bytes32 tradeId)',
     'function getTrade(bytes32 tradeId) view returns (address seller, address buyer, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 usdtAmount, uint256 krwPerUsdt, uint256 createdAt, uint256 sellerDepositBlock, uint8 status, bool sellerDeposited, bool buyerDeposited, bytes32 commitHash)',
+    'function getUserTrades(address user) view returns (bytes32[])',
     'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
   ];
   escrowContract = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, window.__ethersSigner);
@@ -1149,13 +1150,67 @@ async function loadUserTrades() {
   renderStatusList(trades);
   renderHistoryList(trades);
 
+  if (!escrowContract) return;
+
+  // 체인에서 내 거래 복구 (localStorage 분실 대비)
+  await recoverTradesFromChain();
+
   // 진행 중 거래는 체인 상태와 동기화
-  const active = Object.values(trades).filter(t => t.status === 'PENDING' || t.status === 'ACTIVE');
-  if (active.length > 0 && escrowContract) {
+  const active = Object.values(getLocalTrades()).filter(t => t.status === 'PENDING' || t.status === 'ACTIVE');
+  if (active.length > 0) {
     await Promise.all(active.map(t => syncTradeStatusFromChain(t.tradeId)));
     const synced = getLocalTrades();
     renderStatusList(synced);
     renderHistoryList(synced);
+  }
+}
+
+async function recoverTradesFromChain() {
+  try {
+    const tradeIds = await escrowContract.getUserTrades(walletAddress);
+    if (!tradeIds || tradeIds.length === 0) return;
+
+    const local = getLocalTrades();
+    let changed = false;
+
+    for (const tradeId of tradeIds) {
+      // 이미 로컬에 있으면 skip
+      if (local[tradeId]) continue;
+
+      // 체인에서 거래 정보 가져오기
+      const t = await escrowContract.getTrade(tradeId);
+      const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
+      const status = statusArr[Number(t.status)] || 'NONE';
+      if (status === 'NONE' || status === 'COMMITTED') continue;
+
+      const mpcAmt  = parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18));
+      const usdtCeil = parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6));
+      const krwPerUsdt = Number(t.krwPerUsdt);
+      const createdAt = Number(t.createdAt) * 1000; // 초→밀리초
+
+      local[tradeId] = {
+        tradeId,
+        seller:    t.seller,
+        buyer:     t.buyer !== '0x0000000000000000000000000000000000000000' ? t.buyer : null,
+        mpcAmt,
+        usdtCeil,
+        krwPerUsdt,
+        pricePerMpc: krwPerUsdt > 0 && usdtCeil > 0 ? (usdtCeil / mpcAmt) * krwPerUsdt : 0,
+        createdAt,
+        status,
+        recovered: true, // 복구된 거래 표시
+      };
+      changed = true;
+    }
+
+    if (changed) {
+      saveLocalTrades(local);
+      renderStatusList(local);
+      renderHistoryList(local);
+      showToast('📋 체인에서 거래 내역을 복구했습니다');
+    }
+  } catch(e) {
+    // 복구 실패해도 기존 기능에 영향 없음
   }
 }
 
