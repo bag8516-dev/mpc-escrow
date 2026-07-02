@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MPC 에스크로 관리자</title>
+<style>
+:root {
+  --gold:#C9A84C; --gold-light:#E2C06A; --gold-dark:#A07830;
+  --gold-glow:rgba(201,168,76,.28);
+  --navy:#0A0F1E; --navy2:#0D1526; --navy3:#111D35;
+  --card:#0F1A30; --card2:#152038;
+  --border:#1E2E4A; --border-gold:rgba(201,168,76,.30);
+  --text:#FFFFFF; --text2:#B8C6D8; --text3:#5A7090;
+  --success:#2ECC71; --warning:#F39C12; --danger:#E74C3C;
+  --radius:16px; --radius-sm:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{min-height:100%;background:var(--navy);color:var(--text);font-family:'Pretendard','-apple-system','BlinkMacSystemFont','맑은 고딕',sans-serif;font-size:15px;line-height:1.6;}
+button{cursor:pointer;border:none;outline:none;font-family:inherit;}
+input,select{outline:none;border:none;font-family:inherit;color:var(--text);background:transparent;}
+
+#app{max-width:480px;margin:0 auto;padding-bottom:40px;}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--navy2);border-bottom:1px solid rgba(231,76,60,.3);position:sticky;top:0;z-index:100;}
+.header-title{font-size:16px;font-weight:900;color:var(--gold);}
+.admin-badge{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.4);color:#E98080;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin:12px 16px 0;}
+.card-title{font-size:11px;font-weight:700;color:var(--gold);margin-bottom:14px;text-transform:uppercase;letter-spacing:1.2px;}
+
+.btn{width:100%;padding:14px;border-radius:var(--radius-sm);font-size:15px;font-weight:700;transition:all .15s;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#0A0F1E;}
+.btn-danger{background:linear-gradient(135deg,#E74C3C,#922B21);color:#fff;}
+.btn-outline{background:transparent;border:1.5px solid var(--border-gold);color:var(--text2);}
+.btn-sm{padding:8px 14px;font-size:13px;width:auto;}
+.btn-success{background:linear-gradient(135deg,#2ECC71,#1a8a4a);color:#fff;}
+
+.input-wrap{background:var(--navy3);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:8px;margin-bottom:12px;transition:border-color .2s;}
+.input-wrap:focus-within{border-color:var(--gold);}
+.input-wrap input,.input-wrap select{flex:1;font-size:15px;font-weight:600;background:var(--navy3);color:var(--text);}
+.input-label{font-size:13px;color:var(--text2);margin-bottom:6px;display:block;}
+.input-unit{font-size:13px;color:var(--gold);font-weight:600;}
+
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
+.stat-row:last-child{border-bottom:none;}
+.stat-label{font-size:13px;color:var(--text2);}
+.stat-val{font-size:15px;font-weight:700;color:var(--gold);}
+
+.tx-item{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;}
+.tx-item:last-child{margin-bottom:0;}
+.tx-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.tx-id{font-size:12px;color:var(--text3);}
+.tx-sigs{font-size:13px;font-weight:700;}
+.tx-sigs.done{color:var(--success);}
+.tx-sigs.pending{color:var(--warning);}
+.tx-detail{font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.7;}
+.tx-detail strong{color:var(--text);}
+.tx-actions{display:flex;gap:8px;}
+
+.alert{padding:14px;border-radius:var(--radius-sm);font-size:14px;line-height:1.6;margin-bottom:12px;}
+.alert-danger{background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);color:#E98080;}
+.alert-success{background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);color:#2ECC71;}
+.alert-info{background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);color:var(--gold-light);}
+
+.wallet-section{padding:20px 16px 0;}
+.wallet-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:var(--radius-sm);background:var(--card2);border:1.5px solid var(--border-gold);color:var(--text2);font-size:14px;font-weight:600;width:100%;}
+.wallet-connected{display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border-gold);border-radius:var(--radius-sm);padding:10px 14px;}
+.dot-green{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success);flex-shrink:0;}
+.addr-text{font-family:monospace;font-size:13px;color:var(--text2);}
+
+.empty-state{text-align:center;padding:30px 0;color:var(--text3);font-size:14px;}
+
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:448px;z-index:9999;pointer-events:none;}
+.toast{background:#1E2E4A;border:1px solid var(--border-gold);border-radius:12px;padding:12px 16px;font-size:14px;color:var(--text);margin-top:8px;animation:slideUp .2s ease;}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:500;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;max-width:480px;}
+.modal-title{font-size:18px;font-weight:800;margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 헤더 -->
+  <div class="header">
+    <div class="header-title">🔐 MPC 에스크로</div>
+    <div class="admin-badge">관리자</div>
+  </div>
+
+  <!-- 지갑 연결 -->
+  <div class="wallet-section">
+    <div id="areaConnect">
+      <button class="wallet-btn" id="btnConnect" onclick="connectWallet()">🔗 관리자 지갑 연결하기</button>
+    </div>
+    <div id="areaConnected" style="display:none">
+      <div class="wallet-connected">
+        <div class="dot-green"></div>
+        <div class="addr-text" id="displayAddr"></div>
+        <div id="ownerBadge" style="margin-left:auto;font-size:12px;font-weight:700;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 권한 없음 -->
+  <div id="pageUnauth" style="display:none;text-align:center;padding:60px 20px;">
+    <div style="font-size:50px;margin-bottom:16px;">🚫</div>
+    <div style="font-size:18px;font-weight:800;margin-bottom:8px;">접근 권한이 없습니다</div>
+    <div style="color:var(--text2);font-size:14px;">오너 지갑으로만 접속 가능합니다</div>
+  </div>
+
+  <!-- 관리자 화면 (오너만) -->
+  <div id="pageAdmin" style="display:none;">
+
+    <!-- 컨트랙트 잔액 -->
+    <div class="card">
+      <div class="card-title">📊 컨트랙트 현재 잔액</div>
+      <div class="stat-row">
+        <div class="stat-label">MPC 잔액</div>
+        <div class="stat-val" id="statMpc">조회 중...</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">USDT 잔액</div>
+        <div class="stat-val" id="statUsdt">조회 중...</div>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadBalances()">🔄 새로고침</button>
+    </div>
+
+    <!-- 대기 중인 서명 요청 -->
+    <div class="card">
+      <div class="card-title">✍️ 대기 중인 서명 요청</div>
+      <div id="txList"><div class="empty-state">조회 중...</div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadTxList()">🔄 새로고침</button>
+    </div>
+
+    <!-- 긴급 출금 제안 -->
+    <div class="card">
+      <div class="card-title">🚨 긴급 출금 제안</div>
+      <div class="alert alert-info" style="margin-bottom:14px;">
+        ⚠️ 2개 지갑 모두 서명해야 실행됩니다.<br>
+        제안 후 다른 지갑으로도 서명해주세요.
+      </div>
+
+      <label class="input-label">토큰 선택</label>
+      <div class="input-wrap" style="margin-bottom:12px;">
+        <select id="withdrawToken" style="flex:1;font-size:15px;font-weight:600;background:transparent;">
+          <option value="MPC">MPC</option>
+          <option value="USDT">USDT</option>
+        </select>
+      </div>
+
+      <label class="input-label">출금 금액</label>
+      <div class="input-wrap">
+        <input type="number" id="withdrawAmount" placeholder="0" step="any" min="0">
+        <span class="input-unit" id="withdrawUnit">MPC</span>
+      </div>
+
+      <label class="input-label">수령 지갑 주소</label>
+      <div class="input-wrap">
+        <input type="text" id="withdrawTo" placeholder="0x...">
+      </div>
+
+      <div id="withdrawError" style="display:none;" class="alert alert-danger"></div>
+
+      <button class="btn btn-danger" id="btnWithdraw" onclick="proposeWithdrawal()" style="margin-top:4px;">
+        🚨 출금 제안하기
+      </button>
+    </div>
+
+    <!-- 컨트랙트 정보 -->
+    <div class="card">
+      <div class="card-title">📋 컨트랙트 정보</div>
+      <div class="stat-row">
+        <div class="stat-label">프록시</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--text3);">0x958eed8B...e5972</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">멀티시그</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--text3);">0x944936BF...0e87</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">오너 1</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--text3);">0x9A1f24...458</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">오너 2</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--text3);">0xF07ab4...00c1</div>
+      </div>
+    </div>
+
+  </div><!-- /pageAdmin -->
+
+</div><!-- /app -->
+
+<!-- 토스트 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── 설정 ────────────────────────────────────────────────────────────────────
+const ADMIN_CONFIG = {
+  CHAIN_ID:    137,
+  ESCROW_PROXY:   '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972',
+  MULTISIG:       '0x944936BF08e9aeB817Dad323Fd4888A9f1D80e87',
+  MPC_TOKEN:      '0x2d854416d2749B1F0eb8a4B2Ab9027989F2ba262',
+  USDT_TOKEN:     '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+  OWNERS: [
+    '0x9A1f2405650F43213a0ddbbBAfa933c24125F458',
+    '0xF07ab48453B4f97cC15966a6F06F815399ea00c1',
+  ],
+  RPC_FALLBACKS: [
+    'https://polygon-rpc.com',
+    'https://polygon-pokt.nodies.app',
+    'https://polygon.llamarpc.com',
+    'https://rpc.ankr.com/polygon',
+  ],
+};
+
+const MULTISIG_ABI = [
+  'function submitTransaction(address to, uint256 value, bytes calldata data) returns (uint256)',
+  'function confirmTransaction(uint256 txId)',
+  'function revokeConfirmation(uint256 txId)',
+  'function getTransaction(uint256 txId) view returns (address to, uint256 value, bytes memory data, bool executed, uint256 confirmations)',
+  'function transactionCount() view returns (uint256)',
+  'function confirmed(uint256 txId, address owner) view returns (bool)',
+  'function getOwners() view returns (address[])',
+];
+
+const ESCROW_ADMIN_ABI = [
+  'function emergencyWithdraw(address token, uint256 amount, address to)',
+];
+
+const ERC20_ABI = [
+  'function balanceOf(address account) view returns (uint256)',
+];
+
+// ── 전역 상태 ─────────────────────────────────────────────────────────────
+let walletAddress = null;
+let ethersProvider = null;
+let ethersSigner = null;
+let multisigContract = null;
+let isOwner = false;
+
+// ── RPC fallback provider ─────────────────────────────────────────────────
+let _readProvider = null;
+async function getReadProvider() {
+  if (_readProvider) return _readProvider;
+  for (const rpc of ADMIN_CONFIG.RPC_FALLBACKS) {
+    try {
+      const p = new ethers.providers.JsonRpcProvider(rpc);
+      await p.getBlockNumber();
+      _readProvider = p;
+      return p;
+    } catch {}
+  }
+  return null;
+}
+
+// ── 유틸 ─────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function setBtn(id, text, disabled) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  b.textContent = text;
+  b.disabled = disabled;
+}
+
+function shortAddr(addr) {
+  if (!addr) return '';
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function isOwnerAddr(addr) {
+  if (!addr) return false;
+  return ADMIN_CONFIG.OWNERS.some(o => o.toLowerCase() === addr.toLowerCase());
+}
+
+// ── 지갑 연결 ────────────────────────────────────────────────────────────
+async function connectWallet() {
+  if (!window.ethereum) {
+    showToast('Trust Wallet 앱 브라우저에서 접속해주세요');
+    return;
+  }
+  try {
+    setBtn('btnConnect', '연결 중...', true);
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || accounts.length === 0) throw new Error('연결 거부됨');
+
+    walletAddress = accounts[0];
+    ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+    ethersSigner = ethersProvider.getSigner();
+
+    // 네트워크 확인
+    const network = await ethersProvider.getNetwork();
+    if (network.chainId !== ADMIN_CONFIG.CHAIN_ID) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x' + ADMIN_CONFIG.CHAIN_ID.toString(16) }],
+        });
+        ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+        ethersSigner = ethersProvider.getSigner();
+      } catch {
+        showToast('Polygon 네트워크로 전환해주세요');
+        setBtn('btnConnect', '🔗 관리자 지갑 연결하기', false);
+        return;
+      }
+    }
+
+    // UI 업데이트
+    document.getElementById('areaConnect').style.display = 'none';
+    document.getElementById('areaConnected').style.display = 'block';
+    document.getElementById('displayAddr').textContent = shortAddr(walletAddress);
+
+    isOwner = isOwnerAddr(walletAddress);
+
+    if (!isOwner) {
+      document.getElementById('ownerBadge').textContent = '❌ 권한없음';
+      document.getElementById('ownerBadge').style.color = 'var(--danger)';
+      document.getElementById('pageUnauth').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('ownerBadge').textContent = '✅ 오너';
+    document.getElementById('ownerBadge').style.color = 'var(--success)';
+    document.getElementById('pageAdmin').style.display = 'block';
+
+    // 멀티시그 컨트랙트 초기화
+    multisigContract = new ethers.Contract(ADMIN_CONFIG.MULTISIG, MULTISIG_ABI, ethersSigner);
+
+    // 토큰 선택 변경 시 단위 업데이트
+    document.getElementById('withdrawToken').addEventListener('change', (e) => {
+      document.getElementById('withdrawUnit').textContent = e.target.value;
+    });
+
+    // 데이터 로드
+    await Promise.all([loadBalances(), loadTxList()]);
+
+  } catch (err) {
+    setBtn('btnConnect', '🔗 관리자 지갑 연결하기', false);
+    if (err?.code !== 4001 && err?.code !== 'ACTION_REJECTED') {
+      showToast('연결 오류: ' + (err?.message || String(err)));
+    }
+  }
+}
+
+// ── 컨트랙트 잔액 조회 ───────────────────────────────────────────────────
+async function loadBalances() {
+  try {
+    const rp = await getReadProvider();
+    if (!rp) { showToast('RPC 연결 실패'); return; }
+
+    const mpc  = new ethers.Contract(ADMIN_CONFIG.MPC_TOKEN,  ERC20_ABI, rp);
+    const usdt = new ethers.Contract(ADMIN_CONFIG.USDT_TOKEN, ERC20_ABI, rp);
+
+    const [mpcBal, usdtBal] = await Promise.all([
+      mpc.balanceOf(ADMIN_CONFIG.ESCROW_PROXY),
+      usdt.balanceOf(ADMIN_CONFIG.ESCROW_PROXY),
+    ]);
+
+    const mpcAmt  = parseFloat(ethers.utils.formatUnits(mpcBal,  18)).toLocaleString(undefined, {maximumFractionDigits: 2});
+    const usdtAmt = parseFloat(ethers.utils.formatUnits(usdtBal,  6)).toLocaleString(undefined, {maximumFractionDigits: 2});
+
+    document.getElementById('statMpc').textContent  = mpcAmt  + ' MPC';
+    document.getElementById('statUsdt').textContent = usdtAmt + ' USDT';
+  } catch (err) {
+    document.getElementById('statMpc').textContent  = '조회 실패';
+    document.getElementById('statUsdt').textContent = '조회 실패';
+  }
+}
+
+// ── 멀티시그 트랜잭션 목록 ──────────────────────────────────────────────
+async function loadTxList() {
+  const listEl = document.getElementById('txList');
+  listEl.innerHTML = '<div class="empty-state">조회 중...</div>';
+
+  try {
+    const rp = await getReadProvider();
+    if (!rp) { listEl.innerHTML = '<div class="empty-state">RPC 연결 실패</div>'; return; }
+
+    const msRead = new ethers.Contract(ADMIN_CONFIG.MULTISIG, MULTISIG_ABI, rp);
+    const countBN = await msRead.transactionCount();
+    const count = countBN.toNumber();
+
+    if (count === 0) {
+      listEl.innerHTML = '<div class="empty-state">대기 중인 요청이 없습니다</div>';
+      return;
+    }
+
+    // 모든 tx 조회 (미실행만 표시)
+    const escrowIface = new ethers.utils.Interface(ESCROW_ADMIN_ABI);
+    let html = '';
+    let pendingCount = 0;
+
+    for (let i = count - 1; i >= 0; i--) {
+      const [to, , data, executed, confirmations] = await msRead.getTransaction(i);
+      if (executed) continue; // 이미 실행된 것은 건너뜀
+      pendingCount++;
+
+      // 내가 서명했는지 확인
+      const myConfirmed = walletAddress
+        ? await msRead.confirmed(i, walletAddress)
+        : false;
+
+      // calldata 디코딩
+      let desc = '알 수 없는 트랜잭션';
+      try {
+        const decoded = escrowIface.decodeFunctionData('emergencyWithdraw', data);
+        const tokenName = decoded.token.toLowerCase() === ADMIN_CONFIG.MPC_TOKEN.toLowerCase()  ? 'MPC'
+                        : decoded.token.toLowerCase() === ADMIN_CONFIG.USDT_TOKEN.toLowerCase() ? 'USDT'
+                        : shortAddr(decoded.token);
+        const decimals = tokenName === 'USDT' ? 6 : 18;
+        const amt = parseFloat(ethers.utils.formatUnits(decoded.amount, decimals)).toLocaleString();
+        desc = `긴급 출금 — <strong>${amt} ${tokenName}</strong> → <strong>${shortAddr(decoded.to)}</strong>`;
+      } catch {}
+
+      const sigsText = confirmations.toString() + ' / 2 서명';
+      const sigsClass = confirmations.gte(2) ? 'done' : 'pending';
+
+      const confirmBtn = myConfirmed
+        ? `<button class="btn btn-outline btn-sm" onclick="revokeSign(${i})">서명 취소</button>`
+        : `<button class="btn btn-success btn-sm" onclick="signTx(${i})">✍️ 서명하기</button>`;
+
+      html += `
+        <div class="tx-item" id="tx-${i}">
+          <div class="tx-header">
+            <div class="tx-id">#${i} · ${to.slice(0,10)}...</div>
+            <div class="tx-sigs ${sigsClass}">${sigsText}</div>
+          </div>
+          <div class="tx-detail">${desc}${myConfirmed ? '<br><span style="color:var(--success);font-size:12px;">✅ 내 서명 완료</span>' : ''}</div>
+          <div class="tx-actions">${confirmBtn}</div>
+        </div>`;
+    }
+
+    listEl.innerHTML = pendingCount === 0
+      ? '<div class="empty-state">대기 중인 요청이 없습니다</div>'
+      : html;
+
+  } catch (err) {
+    listEl.innerHTML = '<div class="empty-state">조회 실패: ' + (err?.message || String(err)) + '</div>';
+  }
+}
+
+// ── 긴급 출금 제안 ───────────────────────────────────────────────────────
+async function proposeWithdrawal() {
+  const errEl = document.getElementById('withdrawError');
+  errEl.style.display = 'none';
+
+  const tokenKey  = document.getElementById('withdrawToken').value;
+  const amountStr = document.getElementById('withdrawAmount').value.trim();
+  const toAddr    = document.getElementById('withdrawTo').value.trim();
+
+  // 입력값 검증
+  if (!amountStr || parseFloat(amountStr) <= 0) {
+    errEl.textContent = '출금 금액을 입력해주세요.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!toAddr || !ethers.utils.isAddress(toAddr)) {
+    errEl.textContent = '올바른 수령 지갑 주소를 입력해주세요.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!walletAddress || !isOwner) {
+    errEl.textContent = '오너 지갑으로 연결되지 않았습니다.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const tokenAddr = tokenKey === 'MPC' ? ADMIN_CONFIG.MPC_TOKEN : ADMIN_CONFIG.USDT_TOKEN;
+  const decimals  = tokenKey === 'MPC' ? 18 : 6;
+  let amountWei;
+  try {
+    amountWei = ethers.utils.parseUnits(amountStr, decimals);
+  } catch {
+    errEl.textContent = '금액 형식이 올바르지 않습니다.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // 잔액 확인
+  try {
+    const rp = await getReadProvider();
+    if (rp) {
+      const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, rp);
+      const bal = await tokenContract.balanceOf(ADMIN_CONFIG.ESCROW_PROXY);
+      if (bal.lt(amountWei)) {
+        const balFmt = parseFloat(ethers.utils.formatUnits(bal, decimals)).toLocaleString();
+        errEl.textContent = `컨트랙트 ${tokenKey} 잔액 부족 (보유: ${balFmt} ${tokenKey})`;
+        errEl.style.display = 'block';
+        return;
+      }
+    }
+  } catch {}
+
+  // calldata 인코딩
+  const escrowIface = new ethers.utils.Interface(ESCROW_ADMIN_ABI);
+  const callData = escrowIface.encodeFunctionData('emergencyWithdraw', [tokenAddr, amountWei, toAddr]);
+
+  setBtn('btnWithdraw', '제안 중...', true);
+  try {
+    // 1단계: 제안 제출
+    const tx = await multisigContract.submitTransaction(ADMIN_CONFIG.ESCROW_PROXY, 0, callData);
+    const receipt = await tx.wait();
+
+    // 제출된 txId 추출 (TransactionSubmitted 이벤트에서)
+    const iface = new ethers.utils.Interface(['event TransactionSubmitted(uint256 indexed txId, address indexed submitter, address indexed to, bytes data)']);
+    let newTxId = null;
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog(log);
+        if (parsed.name === 'TransactionSubmitted') {
+          newTxId = parsed.args.txId.toNumber();
+          break;
+        }
+      } catch {}
+    }
+
+    showToast('✅ 출금 제안 완료! 이제 서명을 진행합니다...');
+
+    // 2단계: 제안자 본인도 바로 서명
+    if (newTxId !== null) {
+      const tx2 = await multisigContract.confirmTransaction(newTxId);
+      await tx2.wait();
+      showToast('✅ 내 서명 완료 (1/2). 다른 지갑에서 서명해주세요.');
+    }
+
+    document.getElementById('withdrawAmount').value = '';
+    document.getElementById('withdrawTo').value = '';
+    await loadTxList();
+  } catch (err) {
+    errEl.textContent = parseAdminError(err);
+    errEl.style.display = 'block';
+  } finally {
+    setBtn('btnWithdraw', '🚨 출금 제안하기', false);
+  }
+}
+
+// ── 트랜잭션 서명 ────────────────────────────────────────────────────────
+async function signTx(txId) {
+  if (!walletAddress || !isOwner) { showToast('오너 지갑으로 연결해주세요'); return; }
+  try {
+    showToast('서명 요청 중...');
+    const tx = await multisigContract.confirmTransaction(txId);
+    await tx.wait();
+    showToast('✅ 서명 완료!');
+    await Promise.all([loadTxList(), loadBalances()]);
+  } catch (err) {
+    showToast('❌ ' + parseAdminError(err));
+  }
+}
+
+// ── 서명 취소 ────────────────────────────────────────────────────────────
+async function revokeSign(txId) {
+  if (!walletAddress || !isOwner) { showToast('오너 지갑으로 연결해주세요'); return; }
+  try {
+    showToast('서명 취소 중...');
+    const tx = await multisigContract.revokeConfirmation(txId);
+    await tx.wait();
+    showToast('✅ 서명 취소 완료');
+    await loadTxList();
+  } catch (err) {
+    showToast('❌ ' + parseAdminError(err));
+  }
+}
+
+// ── 에러 파싱 ────────────────────────────────────────────────────────────
+function parseAdminError(err) {
+  const msg = err?.message || String(err);
+  if (err?.code === 4001 || err?.code === 'ACTION_REJECTED' ||
+      msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('action_rejected')) {
+    return '서명을 취소했습니다.';
+  }
+  if (msg.includes('insufficient funds')) return 'POL(가스비)이 부족합니다.';
+  if (msg.includes('already confirmed'))  return '이미 서명한 트랜잭션입니다.';
+  if (msg.includes('not confirmed'))      return '아직 서명하지 않은 트랜잭션입니다.';
+  if (msg.includes('already executed'))   return '이미 실행된 트랜잭션입니다.';
+  if (msg.includes('execution failed'))   return '실행 실패 - 컨트랙트 잔액을 확인해주세요.';
+  if (msg.includes('owner only'))         return '오너 지갑으로만 가능합니다.';
+  return msg.length > 80 ? msg.slice(0, 80) + '...' : msg;
+}
+
+// ── 초기화 ───────────────────────────────────────────────────────────────
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason);
+  if (msg.toLowerCase().includes('user rejected') || e.reason?.code === 4001) return;
+  console.error('[admin unhandled]', e.reason);
+});
+</script>
+
+<!-- ethers.js v5 -->
+<script>
+(function() {
+  function loadEthers(url, fallback) {
+    var s = document.createElement('script');
+    s.src = url;
+    s.onerror = function() { if (fallback) loadEthers(fallback); };
+    document.head.appendChild(s);
+  }
+  loadEthers(
+    'https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js'
+  );
+})();
+</script>
+
+</body>
+</html>

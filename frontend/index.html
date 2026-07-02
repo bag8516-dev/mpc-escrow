@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -185,7 +185,7 @@ a { color:var(--gold); text-decoration:none; }
 .guide-text { font-size:13px; color:var(--text2); line-height:1.5; }
 
 /* 카카오 문의 플로팅 버튼 */
-.kakao-btn { position:fixed; bottom:90px; right:16px; background:#FEE500; color:#3C1E1E; border-radius:50px; padding:10px 16px; font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px; box-shadow:0 4px 20px rgba(0,0,0,.4); z-index:300; border:none; }
+.kakao-btn { position:fixed; top:14px; right:12px; background:#FEE500; color:#3C1E1E; border-radius:50px; padding:6px 12px; font-size:12px; font-weight:700; display:flex; align-items:center; gap:5px; box-shadow:0 2px 12px rgba(0,0,0,.3); z-index:300; border:none; }
 .kakao-icon { width:22px; height:22px; }
 
 /* 공식 URL 배너 */
@@ -264,7 +264,7 @@ a { color:var(--gold); text-decoration:none; }
       <button class="btn btn-primary" id="btnConnect" onclick="connectWallet()" style="max-width:320px;width:100%">
         🔗 지갑 연결하기
       </button>
-      <div style="font-size:12px;color:var(--gold)">MetaMask는 지원하지 않습니다</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">Trust Wallet 앱 브라우저에서 접속해주세요</div>
     </div>
   </div>
 
@@ -296,24 +296,24 @@ a { color:var(--gold); text-decoration:none; }
       </div>
 
       <div class="input-group">
-        <label class="input-label">MPC 1개당 USDT 가격</label>
+        <label class="input-label">MPC 1개당 원화 가격</label>
         <div class="input-wrap">
-          <input type="number" id="sellPricePerMpc" placeholder="0.000000" step="0.000001" oninput="calcSell()">
-          <span class="input-unit">USDT</span>
+          <input type="number" id="sellPricePerMpc" placeholder="0" step="1" oninput="calcSell()">
+          <span class="input-unit">원</span>
         </div>
       </div>
 
       <div class="input-group">
         <label class="input-label">1 USDT = 원화 (직접 입력)</label>
         <div class="input-wrap">
-          <input type="number" id="sellKrwPerUsdt" placeholder="1350" oninput="calcSell()">
+          <input type="number" id="sellKrwPerUsdt" placeholder="" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
       </div>
 
       <!-- 계산 결과 -->
       <div class="rate-box" id="sellCalcBox" style="display:none">
-        <div class="rate-row"><span class="rate-label">총 USDT 금액</span><span class="rate-value usdt" id="sellTotalUsdt">— USDT</span></div>
+        <div class="rate-row"><span class="rate-label">총 받을 USDT</span><span class="rate-value usdt" id="sellTotalUsdt">— USDT</span></div>
         <div class="rate-row"><span class="rate-label">총 원화 환산</span><span class="rate-value" id="sellTotalKrw" style="color:#f4c542">—원</span></div>
         <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
         <div class="rate-row">
@@ -328,6 +328,7 @@ a { color:var(--gold); text-decoration:none; }
 
     <div style="padding:16px 16px 0">
       <button class="btn btn-primary" id="btnCreateTrade" onclick="createTradeFlow()" disabled>거래 생성하기</button>
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px">⚠️ 거래 취소 시 블록체인 트랜잭션 비용(POL)은 반환되지 않습니다</div>
     </div>
   </div>
 
@@ -358,10 +359,34 @@ a { color:var(--gold); text-decoration:none; }
       <div class="timer-count" id="timerCount">10:00</div>
     </div>
 
-    <div style="padding:16px 16px 0">
-      <div class="info-box">ℹ️ USDT 전송을 위해 <strong>총 2번 서명</strong>이 필요합니다<br>1번째: 에스크로 사용 허락 / 2번째: 실제 코인 전송</div>
-      <button class="btn btn-success" id="btnBuyDeposit" onclick="buyDepositFlow()" style="margin-top:12px">USDT 예치하고 구매하기</button>
+    <div style="padding:16px 16px 0" id="buyActionArea">
+      <div class="info-box" style="margin-bottom:10px">
+        ℹ️ <strong>거래 전 꼭 읽어주세요</strong><br><br>
+        1️⃣ 지갑 연결 시 <strong>"확인되지 않은 연결"</strong> 경고가 표시될 수 있습니다. 이는 Trust Wallet의 일반적인 보안 안내이며 정상입니다. <strong>"연결"</strong>을 눌러 진행해주세요.<br><br>
+        2️⃣ USDT 전송 시 <strong>총 2번 서명</strong>이 필요합니다.<br>
+        &nbsp;&nbsp;• 1번째: 에스크로 사용 허락 (Approve)<br>
+        &nbsp;&nbsp;• 2번째: 실제 USDT 전송<br><br>
+        3️⃣ 거래 후 지갑 내역에 <strong>승인·전송 2건</strong>이 표시되지만 실제 차감은 <strong>1회</strong>만 됩니다.
+      </div>
+      <button class="btn btn-success" id="btnBuyDeposit" onclick="buyDepositFlow()" style="margin-top:4px">USDT 예치하고 구매하기</button>
       <button class="btn btn-outline" id="btnBuyCancel" onclick="cancelTradeFlow()" style="margin-top:8px">거래 취소</button>
+    </div>
+    <!-- USDT 예치 후 대기 화면 -->
+    <div style="padding:16px;display:none" id="buyWaitArea">
+      <div class="success-box">✅ USDT 예치 완료! 판매자의 거래 확정을 기다리는 중입니다.</div>
+      <button class="btn btn-outline" onclick="cancelTradeFlow()" style="margin-top:10px">거래 취소 (양측 반환)</button>
+    </div>
+    <!-- 거래 완료 화면 -->
+    <div style="padding:16px;display:none;text-align:center" id="buyCompleteArea">
+      <div style="font-size:48px;margin-bottom:12px">🎉</div>
+      <div style="font-size:18px;font-weight:800;color:var(--success)">거래 완료!</div>
+      <div style="font-size:14px;color:var(--text2);margin-top:8px">MPC가 지갑으로 전송됐습니다.</div>
+    </div>
+    <!-- 취소/만료 화면 -->
+    <div style="padding:16px;display:none;text-align:center" id="buyCancelledArea">
+      <div style="font-size:48px;margin-bottom:12px">❌</div>
+      <div style="font-size:18px;font-weight:800;color:var(--danger)" id="buyCancelledMsg">거래가 취소됐습니다</div>
+      <div style="font-size:14px;color:var(--text2);margin-top:8px">USDT가 지갑으로 반환됩니다.</div>
     </div>
   </div>
 
@@ -438,12 +463,13 @@ a { color:var(--gold); text-decoration:none; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">🎉 거래가 생성됐습니다!</div>
-    <div style="color:var(--text2);font-size:14px;margin-bottom:12px">구매자에게 아래 링크를 카카오톡으로 전송해주세요.</div>
+    <div style="color:var(--text2);font-size:14px;margin-bottom:12px">아래 링크를 카카오톡으로 전송하세요.<br>구매자가 누르면 <strong style="color:var(--gold)">Trust Wallet이 바로 열립니다.</strong></div>
     <div class="link-box">
       <div class="link-input" id="shareUrl"></div>
       <button class="copy-btn" id="copyUrlBtn" onclick="copyShareUrl()">복사</button>
     </div>
-    <div class="warn-box" style="margin-top:12px">⏱ 10분 내에 구매자가 응답하지 않으면 자동으로 취소됩니다</div>
+    <div class="info-box" style="margin-top:10px;font-size:12px">📱 카카오톡에서 링크 클릭 → Trust Wallet 앱 자동 실행</div>
+    <div class="warn-box" style="margin-top:8px">⏱ 10분 내에 구매자가 응답하지 않으면 자동으로 취소됩니다</div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalShareLink')">확인</button>
   </div>
 </div>
@@ -509,6 +535,7 @@ a { color:var(--gold); text-decoration:none; }
   <div style="font-size:60px">⌛</div>
   <div style="font-size:20px;font-weight:800">거래가 만료됐습니다</div>
   <div style="color:var(--text2);font-size:15px;line-height:1.7">판매자에게 새 링크를 요청해주세요.<br>거래는 생성 후 10분간만 유효합니다.</div>
+  <button class="btn btn-outline btn-sm" onclick="location.reload()" style="margin-top:8px">🔄 다시 시도</button>
 </div>
 
 <!-- 토스트 -->
@@ -523,7 +550,7 @@ a { color:var(--gold); text-decoration:none; }
 // ── 설정 ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   // ★ 배포 후 아래 주소를 실제 프록시 주소로 교체하세요 ★
-  ESCROW_PROXY:  '0x9b5b465088F85F587A67b8AFCaFae14001Dcacc6',
+  ESCROW_PROXY:  '0x547FA64a307EdFD1B458b54Ea5ca114f5269ea8D',
   MPC_TOKEN:     '0x2d854416d2749B1F0eb8a4B2Ab9027989F2ba262',
   USDT_TOKEN:    '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
@@ -538,8 +565,8 @@ const CONFIG = {
   // RPC_URL:    'https://rpc-mumbai.maticvigil.com',
   // EXPLORER:   'https://mumbai.polygonscan.com',
 
-  WC_PROJECT_ID: 'YOUR_WALLETCONNECT_PROJECT_ID', // https://cloud.walletconnect.com
-  KAKAO_CHANNEL: 'http://pf.kakao.com/YOUR_KAKAO_CHANNEL',
+  WC_PROJECT_ID: '3bb27596d90984a0f485530e30b44cba',
+  KAKAO_CHANNEL: 'http://pf.kakao.com/_HCKbX',
   OFFICIAL_URL:  window.location.hostname,
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MAX_MPC:       100000,
@@ -625,10 +652,13 @@ function detectEnvironment() {
 function setDeviceGuide() {
   const ua = navigator.userAgent;
   const el = document.getElementById('deviceGuide');
-  if (/iPhone|iPad/i.test(ua)) {
-    el.textContent = '🍎 아이폰은 Safari 또는 Chrome 브라우저에서 접속해주세요.';
+  const isTrustWallet = /Trust\/|TrustWallet/i.test(ua);
+  if (isTrustWallet) {
+    el.textContent = '✅ Trust Wallet 브라우저가 감지됐습니다. 아래 버튼을 눌러 연결하세요.';
+  } else if (/iPhone|iPad/i.test(ua)) {
+    el.textContent = '🍎 Trust Wallet 앱 → 탐색 탭에서 접속해주세요.';
   } else if (/Android/i.test(ua)) {
-    el.textContent = '📱 안드로이드는 Chrome 또는 삼성 인터넷에서 접속해주세요.';
+    el.textContent = '📱 Trust Wallet 앱 → 탐색 탭에서 접속해주세요.';
   }
 }
 
@@ -636,69 +666,54 @@ function setDeviceGuide() {
 async function connectWallet() {
   const btn = document.getElementById('btnConnect');
   setButtonLoading(btn, '연결 중...');
-
   try {
-    // WalletConnect v2 (ethers.js 없이 window.ethereum 또는 WC 사용)
-    // 실제 배포 시 WalletConnect SDK 로드 필요
-    // 여기서는 window.ethereum (Trust Wallet 내장 브라우저 또는 WC 주입) 사용
-    if (typeof window.ethereum === 'undefined') {
-      // Trust Wallet 딥링크로 열기
-      openTrustWalletDeepLink();
+    if (typeof ethers === 'undefined') {
       resetButton(btn, '🔗 지갑 연결하기');
+      showToast('라이브러리 로딩 중... 3초 후 다시 눌러주세요');
       return;
     }
-
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    if (!accounts || accounts.length === 0) throw new Error('지갑 연결이 거부됐습니다');
-
-    walletAddress = accounts[0];
-
-    // 네트워크 확인 및 자동 전환
-    await ensurePolygonNetwork();
-
-    // ethers.js 없이 간단한 provider wrapper
-    await initContracts();
-
-    // UI 전환
-    onWalletConnected();
-
+    if (typeof window.ethereum !== 'undefined') {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) throw new Error('연결이 거부됐습니다');
+      walletAddress = accounts[0];
+      window.__ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+      window.__ethersSigner = window.__ethersProvider.getSigner();
+      await ensurePolygonNetwork();
+      initContractsEthers();
+      window.ethereum.on('accountsChanged', accs => { if (!accs.length) location.reload(); else { walletAddress = accs[0]; onWalletConnected(); } });
+      window.ethereum.on('chainChanged', () => location.reload());
+      onWalletConnected();
+      return;
+    }
+    // PC 브라우저: window.ethereum 없음
+    if (window.__appKit) {
+      resetButton(btn, '🔗 지갑 연결하기');
+      window.__appKit.open();
+      return;
+    }
+    resetButton(btn, '🔗 지갑 연결하기');
+    showToast('Trust Wallet 앱 브라우저에서 접속하거나 MetaMask를 설치해주세요');
   } catch (err) {
     resetButton(btn, '🔗 지갑 연결하기');
-    if (err.message && err.message.includes('version')) {
-      document.getElementById('modalTrustVersion').classList.add('show');
-    } else {
-      showError(parseError(err));
-    }
+    showToast('오류: ' + (err.message || String(err)));
+    showError(parseError(err));
   }
 }
 
-function openTrustWalletDeepLink() {
-  const url = encodeURIComponent(window.location.href);
-  const deepLink = `trust://open_url?coin_id=966&url=${url}`;
-  window.location.href = deepLink;
-  // fallback: 앱스토어
-  setTimeout(() => {
-    const ua = navigator.userAgent;
-    if (/iPhone|iPad/i.test(ua)) {
-      window.location.href = 'https://apps.apple.com/app/trust-crypto-bitcoin-wallet/id1288339409';
-    } else {
-      window.location.href = 'https://play.google.com/store/apps/details?id=com.wallet.crypto.trustapp';
-    }
-  }, 2000);
-}
-
 async function ensurePolygonNetwork() {
-  const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-  const chainId = parseInt(chainIdHex, 16);
-  if (chainId !== CONFIG.CHAIN_ID) {
+  if (!window.__ethersProvider) return;
+  const network = await window.__ethersProvider.getNetwork();
+  if (network.chainId !== CONFIG.CHAIN_ID) {
     try {
-      await window.ethereum.request({
+      await window.__ethersProvider.provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: '0x' + CONFIG.CHAIN_ID.toString(16) }],
       });
+      window.__ethersProvider = new ethers.providers.Web3Provider(window.__ethersProvider.provider);
+      window.__ethersSigner = window.__ethersProvider.getSigner();
     } catch (switchErr) {
       if (switchErr.code === 4902) {
-        await window.ethereum.request({
+        await window.__ethersProvider.provider.request({
           method: 'wallet_addEthereumChain',
           params: [{
             chainId: '0x' + CONFIG.CHAIN_ID.toString(16),
@@ -713,12 +728,26 @@ async function ensurePolygonNetwork() {
   }
 }
 
-async function initContracts() {
-  // 간단한 RPC 호출 래퍼 (ethers 없이)
-  // 실제 배포 시 ethers.js CDN 포함 권장
-  escrowContract = { address: CONFIG.ESCROW_PROXY };
-  mpcContract   = { address: CONFIG.MPC_TOKEN };
-  usdtContract  = { address: CONFIG.USDT_TOKEN };
+function initContractsEthers() {
+  const ERC20_ABI = [
+    'function approve(address spender, uint256 amount) returns (bool)',
+    'function balanceOf(address owner) view returns (uint256)',
+  ];
+  const ESCROW_ABI = [
+    'function commitTrade(bytes32 commitHash) returns (bytes32)',
+    'function revealAndDeposit(bytes32 tradeId, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 krwPerUsdt, bytes32 secret)',
+    'function buyerDeposit(bytes32 tradeId)',
+    'function confirmTrade(bytes32 tradeId)',
+    'function cancelTrade(bytes32 tradeId)',
+    'function expireTrade(bytes32 tradeId)',
+    'function getTrade(bytes32 tradeId) view returns (address seller, address buyer, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 usdtAmount, uint256 krwPerUsdt, uint256 createdAt, uint256 sellerDepositBlock, uint8 status, bool sellerDeposited, bool buyerDeposited, bytes32 commitHash)',
+    'function getUserTrades(address user) view returns (bytes32[])',
+    'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
+    'event TradeCommitted(bytes32 indexed tradeId, address indexed seller, bytes32 commitHash)',
+  ];
+  escrowContract = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, window.__ethersSigner);
+  mpcContract    = new ethers.Contract(CONFIG.MPC_TOKEN,    ERC20_ABI,  window.__ethersSigner);
+  usdtContract   = new ethers.Contract(CONFIG.USDT_TOKEN,   ERC20_ABI,  window.__ethersSigner);
 }
 
 function onWalletConnected() {
@@ -744,12 +773,7 @@ function onWalletConnected() {
   // 거래 목록 갱신
   loadUserTrades();
 
-  // 계정 변경 감지
-  window.ethereum.on('accountsChanged', accounts => {
-    if (accounts.length === 0) location.reload();
-    else { walletAddress = accounts[0]; onWalletConnected(); }
-  });
-  window.ethereum.on('chainChanged', () => location.reload());
+  // 계정/네트워크 변경 감지 (window.ethereum 이벤트로 처리됨)
 }
 
 // ── 탭 전환 ───────────────────────────────────────────────────────────────
@@ -809,10 +833,11 @@ function calcSell() {
     return;
   }
 
-  // USDT 소수점 첫째 자리 올림
-  const rawUsdt = mpcAmt * pricePerMpc;
+  // 원화 기반 계산: MPC단가(원) × 수량 = 총원화 → ÷ USDT환율 = 받을USDT
+  const totalKrw = mpcAmt * pricePerMpc;
+  const rawUsdt  = totalKrw / krwPerUsdt;
   const usdtCeil = Math.ceil(rawUsdt * 10) / 10;
-  const totalKrw = usdtCeil * krwPerUsdt;
+  const pricePerMpcUsdt = pricePerMpc / krwPerUsdt; // 컨트랙트용 USDT 단가
 
   document.getElementById('sellTotalUsdt').textContent = `${usdtCeil.toFixed(1)} USDT`;
   document.getElementById('sellTotalKrw').textContent  = `${Math.round(totalKrw).toLocaleString()}원`;
@@ -845,9 +870,11 @@ async function createTradeFlow() {
   if (!mpcAmt || !pricePerMpc || !krwPerUsdt) { showToast('모든 항목을 입력해주세요'); return; }
   if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
 
-  const rawUsdt = mpcAmt * pricePerMpc;
+  // pricePerMpc는 원화 단가; 컨트랙트엔 USDT 단가 필요
+  const pricePerMpcUsdt = pricePerMpc / krwPerUsdt;
+  const rawUsdt = mpcAmt * pricePerMpcUsdt;
   const usdtCeil = Math.ceil(rawUsdt * 10) / 10;
-  const totalKrw = Math.round(usdtCeil * krwPerUsdt);
+  const totalKrw = Math.round(mpcAmt * pricePerMpc);
 
   // 1. 수량 확인 팝업
   const confirmed = await showConfirm(
@@ -856,7 +883,7 @@ async function createTradeFlow() {
       <div class="summary-item"><div class="summary-key">MPC 수량</div><div class="summary-val mpc">${mpcAmt.toLocaleString()} MPC</div></div>
       <div class="summary-item"><div class="summary-key">총 USDT</div><div class="summary-val usdt">${usdtCeil.toFixed(1)} USDT</div></div>
       <div class="summary-item"><div class="summary-key">총 원화</div><div class="summary-val krw">${totalKrw.toLocaleString()}원</div></div>
-      <div class="summary-item"><div class="summary-key">MPC 단가</div><div class="summary-val">${pricePerMpc} USDT</div></div>
+      <div class="summary-item"><div class="summary-key">MPC 단가</div><div class="summary-val">${pricePerMpc.toLocaleString()}원</div></div>
     </div>
     위 내용으로 거래를 생성하시겠습니까?`
   );
@@ -865,6 +892,15 @@ async function createTradeFlow() {
   // 2. POL 잔액 확인
   const hasGas = await checkPolBalance();
   if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
+
+  // 2-1. MPC 잔액 확인
+  const mpcBalance = await mpcContract.balanceOf(walletAddress);
+  const mpcNeeded = bigIntMpc(mpcAmt);
+  if (mpcBalance.lt(mpcNeeded)) {
+    const have = parseFloat(ethers.utils.formatUnits(mpcBalance, 18)).toFixed(2);
+    showError(`❌ MPC 잔액 부족<br><br>필요: ${mpcAmt.toLocaleString()} MPC<br>보유: ${have} MPC<br><br>판매할 MPC를 지갑에 먼저 입금해주세요.`);
+    return;
+  }
 
   // 3. 지갑 주소 확인
   const addrOk = await showAddrConfirm(walletAddress);
@@ -890,8 +926,8 @@ async function createTradeFlow() {
     const secretHex = '0x' + Array.from(secret).map(b => b.toString(16).padStart(2,'0')).join('');
 
     const mpcWei         = mpcAmountWei;
-    const priceWei       = bigIntUsdt(pricePerMpc);   // 6 decimals
-    const krwInt         = BigInt(Math.round(krwPerUsdt));
+    const priceWei       = bigIntUsdt(pricePerMpcUsdt);   // USDT 6 decimals (원화단가 ÷ 환율)
+    const krwInt         = ethers.BigNumber.from(Math.round(krwPerUsdt));
     const commitHash     = await calcCommitHash(secretHex, mpcWei, priceWei, krwInt);
 
     const tradeId = await callCommitTrade(commitHash);
@@ -906,15 +942,22 @@ async function createTradeFlow() {
 
     await callRevealAndDeposit(tradeId, mpcWei, priceWei, krwInt, secretHex);
 
-    // 7. 로컬 저장
+    // 7. 체인에서 거래 존재 확인 (잘못된 링크 방지)
+    const verifyTrade = await fetchTrade(tradeId);
+    if (!verifyTrade || Number(verifyTrade.status) !== 2) {
+      throw new Error(`거래 생성은 완료됐지만 체인에서 확인되지 않습니다.\nPolygonscan에서 트랜잭션을 확인해주세요.\ntradeId: ${tradeId}`);
+    }
+
+    // 8. 로컬 저장
     saveTrade(tradeId, {
       tradeId, seller: walletAddress, mpcAmt, pricePerMpc, usdtCeil, krwPerUsdt,
       createdAt: Date.now(), status: 'PENDING', secret: secretHex
     });
 
-    // 8. 공유 링크 표시
-    const shareUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
-    document.getElementById('shareUrl').textContent = shareUrl;
+    // 8. 공유 링크 표시 (Trust Wallet 딥링크로 변환)
+    const pageUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
+    const deepLink = `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(pageUrl)}`;
+    document.getElementById('shareUrl').textContent = deepLink;
     document.getElementById('modalShareLink').classList.add('show');
 
     resetButton(btn, '거래 생성하기');
@@ -940,14 +983,32 @@ async function showBuyerPage(tradeId) {
 
   try {
     const trade = await fetchTrade(tradeId);
-    if (!trade || trade.status === 0) {
-      showExpiredPage(); return;
-    }
-    // PENDING 아닌 경우
-    const statusNames = ['없음','커밋','대기 중','진행 중','완료','취소','만료'];
-    if (trade.status > 2) {
-      document.getElementById('pageExpired').style.display = 'flex';
+    if (!trade) {
+      // 거래 로드 실패 (네트워크 오류 또는 잘못된 거래 ID)
       document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래를 불러올 수 없습니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '네트워크 오류이거나 유효하지 않은 링크입니다.<br>판매자에게 링크를 다시 받거나, 잠시 후 다시 시도해주세요.';
+      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
+      return;
+    }
+    const tradeStatus = Number(trade.status);
+    if (tradeStatus === 0) {
+      // 거래가 이 컨트랙트에 존재하지 않음
+      document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래를 찾을 수 없습니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '링크가 만료됐거나 잘못된 링크입니다.<br>판매자에게 새 링크를 요청하세요.';
+      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
+      return;
+    }
+    if (tradeStatus > 2) {
+      const msgMap = { 4:'거래가 이미 완료됐습니다', 5:'거래가 취소됐습니다', 6:'거래가 만료됐습니다' };
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = msgMap[tradeStatus] || '거래가 종료됐습니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '판매자에게 새 링크를 요청하세요.';
+      document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
       return;
     }
 
@@ -998,7 +1059,7 @@ async function buyDepositFlow() {
 
   try {
     const trade = await fetchTrade(currentTradeId);
-    const usdtAmt = BigInt(trade.usdtAmount);
+    const usdtAmt = ethers.BigNumber.from(trade.usdtAmount);
 
     // 서명 1: Approve USDT
     await showSignGuide(
@@ -1015,12 +1076,15 @@ async function buyDepositFlow() {
       '2번째 서명 안내 (USDT 전송)',
       `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>USDT 전송</strong> 요청이 표시됩니다</div></div>
        <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로 컨트랙트로 USDT가 예치됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">판매자가 확정하면 MPC가 자동 지급됩니다</div></div>`
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">예치 즉시 MPC가 자동으로 지갑에 전송됩니다</div></div>`
     );
 
     await callBuyerDeposit(currentTradeId);
 
-    showToast('✅ USDT 예치 완료! 판매자 확정을 기다려주세요');
+    // 즉시 완료 화면으로 전환
+    document.getElementById('buyActionArea').style.display = 'none';
+    document.getElementById('buyTimerBar').style.display = 'none';
+    document.getElementById('buyCompleteArea').style.display = 'block';
     resetButton(btn, 'USDT 예치하고 구매하기');
     loadUserTrades();
 
@@ -1030,10 +1094,36 @@ async function buyDepositFlow() {
   }
 }
 
+let buyerPollInterval = null;
+function startBuyerStatusPolling(tradeId) {
+  if (buyerPollInterval) clearInterval(buyerPollInterval);
+  buyerPollInterval = setInterval(async () => {
+    try {
+      const trade = await fetchTrade(tradeId);
+      if (!trade) return;
+      const status = Number(trade.status);
+      // 4 = COMPLETED
+      if (status === 4) {
+        clearInterval(buyerPollInterval);
+        document.getElementById('buyWaitArea').style.display = 'none';
+        document.getElementById('buyCompleteArea').style.display = 'block';
+      }
+      // 5 = CANCELLED, 6 = EXPIRED
+      if (status === 5 || status === 6) {
+        clearInterval(buyerPollInterval);
+        document.getElementById('buyWaitArea').style.display = 'none';
+        document.getElementById('buyCancelledMsg').textContent =
+          status === 5 ? '거래가 취소됐습니다' : '거래가 만료됐습니다';
+        document.getElementById('buyCancelledArea').style.display = 'block';
+      }
+    } catch(e) {}
+  }, 10000);
+}
+
 // ── 취소 플로우 ────────────────────────────────────────────────────────────
 async function cancelTradeFlow() {
-  const tradeId = currentTradeId || (await selectActiveTrade());
-  if (!tradeId) return;
+  const tradeId = currentTradeId;
+  if (!tradeId) { showError('거래 ID를 찾을 수 없습니다.'); return; }
 
   const ok = await showConfirm('거래 취소', '거래를 취소하면 양측 모두 즉시 환불됩니다.<br>취소하시겠습니까?');
   if (!ok) return;
@@ -1082,6 +1172,75 @@ async function loadUserTrades() {
   const trades = getLocalTrades();
   renderStatusList(trades);
   renderHistoryList(trades);
+
+  if (!escrowContract) return;
+
+  // 체인에서 내 거래 복구 (localStorage 분실 대비)
+  await recoverTradesFromChain();
+
+  // 진행 중 거래를 체인 상태와 동기화
+  // ★ 동시 실행(Promise.all) 대신 순차 실행 → localStorage 덮어쓰기 방지
+  const active = Object.values(getLocalTrades()).filter(t => t.status === 'PENDING' || t.status === 'ACTIVE');
+  if (active.length > 0) {
+    for (const t of active) {
+      await syncTradeStatusFromChain(t.tradeId);
+    }
+    const synced = getLocalTrades();
+    renderStatusList(synced);
+    renderHistoryList(synced);
+  }
+
+  // 진행 중 거래가 있으면 카운트다운 실시간 업데이트 시작
+  startStatusCountdown();
+}
+
+async function recoverTradesFromChain() {
+  try {
+    const tradeIds = await escrowContract.getUserTrades(walletAddress);
+    if (!tradeIds || tradeIds.length === 0) return;
+
+    const local = getLocalTrades();
+    let changed = false;
+
+    for (const tradeId of tradeIds) {
+      // 이미 로컬에 있으면 skip
+      if (local[tradeId]) continue;
+
+      // 체인에서 거래 정보 가져오기
+      const t = await escrowContract.getTrade(tradeId);
+      const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
+      const status = statusArr[Number(t.status)] || 'NONE';
+      if (status === 'NONE' || status === 'COMMITTED') continue;
+
+      const mpcAmt  = parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18));
+      const usdtCeil = parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6));
+      const krwPerUsdt = Number(t.krwPerUsdt);
+      const createdAt = Number(t.createdAt) * 1000; // 초→밀리초
+
+      local[tradeId] = {
+        tradeId,
+        seller:    t.seller,
+        buyer:     t.buyer !== '0x0000000000000000000000000000000000000000' ? t.buyer : null,
+        mpcAmt,
+        usdtCeil,
+        krwPerUsdt,
+        pricePerMpc: krwPerUsdt > 0 && usdtCeil > 0 ? (usdtCeil / mpcAmt) * krwPerUsdt : 0,
+        createdAt,
+        status,
+        recovered: true, // 복구된 거래 표시
+      };
+      changed = true;
+    }
+
+    if (changed) {
+      saveLocalTrades(local);
+      renderStatusList(local);
+      renderHistoryList(local);
+      showToast('📋 체인에서 거래 내역을 복구했습니다');
+    }
+  } catch(e) {
+    // 복구 실패해도 기존 기능에 영향 없음
+  }
 }
 
 function renderStatusList(trades) {
@@ -1113,6 +1272,29 @@ function tradeItemHtml(t) {
   const partnerShort = partner !== '—' ? `<span style="color:var(--primary)">${partner.slice(0,6)}</span>...${partner.slice(-4)}` : '—';
   const scanLink = `${CONFIG.EXPLORER}/address/${CONFIG.ESCROW_PROXY}`;
 
+  // 만료 여부 계산 (PENDING 상태에서 10분 경과)
+  const now = Date.now();
+  const isExpiredTime = t.status === 'PENDING' && t.createdAt && (now - t.createdAt) > CONFIG.TRADE_TIMEOUT * 1000;
+  const remainMs = t.createdAt ? Math.max(0, (t.createdAt + CONFIG.TRADE_TIMEOUT * 1000) - now) : 0;
+  const remainMin = Math.floor(remainMs / 60000);
+  const remainSec = Math.floor((remainMs % 60000) / 1000);
+
+  let buttons = '';
+  if (t.status === 'PENDING') {
+    if (isExpiredTime) {
+      buttons = `<button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="expireTradeById('${t.tradeId}')">⏰ 만료 처리 및 MPC 반환</button>`;
+    } else {
+      buttons = `
+        <div style="font-size:12px;color:var(--text3);margin-top:8px" data-countdown="${t.createdAt}">⏱ 만료까지 ${remainMin}분 ${remainSec}초</div>
+        <button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="copyTradeLink('${t.tradeId}')">🔗 구매자 링크 다시 복사</button>
+        <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
+    }
+  } else if (t.status === 'ACTIVE') {
+    // 자동 확정 컨트랙트에서는 ACTIVE 상태가 발생하지 않지만 구버전 거래 대비
+    buttons = `
+      <div class="info-box" style="margin-top:10px;font-size:12px">⏳ 처리 중입니다. 잠시 기다려주세요.</div>`;
+  }
+
   return `<div class="trade-item">
     <div class="trade-item-header">
       <span class="badge badge-${badgeMap[t.status]||'pending'}">${statusMap[t.status]||t.status}</span>
@@ -1128,9 +1310,18 @@ function tradeItemHtml(t) {
       <a class="polygonscan-link" href="${scanLink}" target="_blank">Polygonscan ↗</a>
     </div>
     <div style="font-size:12px;color:var(--text3);margin-top:6px">상대방: ${partnerShort}</div>
-    ${t.status === 'PENDING' && role === '판매자' ? `<button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="cancelTradeById('${t.tradeId}')">취소 및 반환</button>` : ''}
-    ${t.status === 'ACTIVE' && role === '판매자' ? `<button class="btn btn-sm btn-success" style="margin-top:10px" onclick="confirmTradeById('${t.tradeId}')">거래 확정</button>` : ''}
+    ${buttons}
   </div>`;
+}
+
+function copyTradeLink(tradeId) {
+  const pageUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
+  const deepLink = `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(pageUrl)}`;
+  navigator.clipboard.writeText(deepLink).then(() => {
+    showToast('✅ 링크 복사 완료! 카카오톡으로 전송하세요');
+  }).catch(() => {
+    showError('링크 복사에 실패했습니다.<br>직접 복사하세요:<br><br><small style="word-break:break-all">' + deepLink + '</small>');
+  });
 }
 
 async function cancelTradeById(tradeId) {
@@ -1155,145 +1346,139 @@ async function confirmTradeById(tradeId) {
   } catch(err) { showError(parseError(err)); }
 }
 
-// ── 스마트 컨트랙트 호출 (window.ethereum 직접 사용) ──────────────────────
-// 실제 배포 시 ethers.js 또는 viem 사용 권장
-
-async function sendTx(to, data) {
-  const tx = await window.ethereum.request({
-    method: 'eth_sendTransaction',
-    params: [{ from: walletAddress, to, data, gas: '0x' + (300000).toString(16) }],
-  });
-  return waitForReceipt(tx);
+async function expireTradeById(tradeId) {
+  const ok = await showConfirm('만료 처리', '10분이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
+  if (!ok) return;
+  try {
+    await callExpire(tradeId);
+    updateLocalTradeStatus(tradeId, 'EXPIRED');
+    showToast('✅ 만료 처리 완료! MPC가 반환됩니다');
+    loadUserTrades();
+  } catch(err) { showError(parseError(err)); }
 }
 
-async function waitForReceipt(txHash) {
-  for (let i = 0; i < 60; i++) {
-    const receipt = await window.ethereum.request({
-      method: 'eth_getTransactionReceipt', params: [txHash],
-    });
-    if (receipt) {
-      if (receipt.status === '0x0') throw new Error('트랜잭션 실패');
-      return receipt;
+// 체인에서 실제 거래 상태 동기화
+// ★ localStorage를 한 번만 읽고 한 번만 씀 → 동시 실행 시 덮어쓰기 방지
+async function syncTradeStatusFromChain(tradeId) {
+  try {
+    const onChain = await fetchTrade(tradeId);
+    if (!onChain) return;
+    const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
+    const chainStatus = statusArr[Number(onChain.status)] || null;
+    if (!chainStatus || chainStatus === 'NONE') return;
+
+    // localStorage를 한 번에 읽고 한 번에 저장
+    const trades = getLocalTrades();
+    if (!trades[tradeId]) return;
+    trades[tradeId].status = chainStatus;
+    if (onChain.buyer && onChain.buyer !== '0x0000000000000000000000000000000000000000') {
+      trades[tradeId].buyer = onChain.buyer;
     }
-    await sleep(2000);
-  }
-  throw new Error('트랜잭션 확인 시간 초과');
+    saveLocalTrades(trades);
+  } catch(e) {}
 }
 
-async function callRpc(method, params) {
-  return window.ethereum.request({ method, params });
+// ── 진행 중 탭 카운트다운 실시간 업데이트 ────────────────────────────────
+let statusCountdownInterval = null;
+function startStatusCountdown() {
+  if (statusCountdownInterval) clearInterval(statusCountdownInterval);
+
+  // PENDING 거래가 없으면 시작 안 함
+  const trades = getLocalTrades();
+  const hasPending = Object.values(trades).some(t => t.status === 'PENDING');
+  if (!hasPending) return;
+
+  statusCountdownInterval = setInterval(() => {
+    const now = Date.now();
+    // 진행 중 탭의 카운트다운 텍스트 요소만 업데이트
+    document.querySelectorAll('[data-countdown]').forEach(el => {
+      const createdAt = Number(el.dataset.countdown);
+      const remainMs = Math.max(0, (createdAt + CONFIG.TRADE_TIMEOUT * 1000) - now);
+      if (remainMs === 0) {
+        el.textContent = '⏰ 만료됨 - 만료 처리 버튼을 눌러주세요';
+        el.style.color = 'var(--danger)';
+      } else {
+        const min = Math.floor(remainMs / 60000);
+        const sec = Math.floor((remainMs % 60000) / 1000);
+        el.textContent = `⏱ 만료까지 ${min}분 ${sec}초`;
+      }
+    });
+  }, 1000);
 }
 
-function encodeUint256(n) {
-  return BigInt(n).toString(16).padStart(64,'0');
-}
-function encodeBytes32(hex) {
-  return hex.replace('0x','').padEnd(64,'0');
-}
-function encodeAddress(addr) {
-  return addr.replace('0x','').toLowerCase().padStart(64,'0');
-}
-
-// selector helpers (keccak256 선택자 직접 하드코딩 – Solidity 시그니처 기반)
-const SEL = {
-  approve:           '0x095ea7b3',
-  commitTrade:       '0x00000001', // placeholder – deploy 후 실제 선택자로 교체
-  revealAndDeposit:  '0x00000002',
-  buyerDeposit:      '0x00000003',
-  confirmTrade:      '0x00000004',
-  cancelTrade:       '0x00000005',
-  getTrade:          '0x00000006',
-  getRemainingTime:  '0x00000007',
-};
-// NOTE: 실제 선택자는 컨트랙트 배포 후 ABI에서 자동 계산됩니다.
-// 프로덕션에서는 ethers.js Interface로 인코딩하세요:
-//   const iface = new ethers.Interface(ESCROW_ABI);
-//   const data = iface.encodeFunctionData('commitTrade', [commitHash]);
+// ── 스마트 컨트랙트 호출 (ethers.js + Reown AppKit) ───────────────────────
 
 async function approveMpc(amount) {
-  const data = SEL.approve + encodeAddress(CONFIG.ESCROW_PROXY) + encodeUint256(amount);
-  return sendTx(CONFIG.MPC_TOKEN, data);
+  const tx = await mpcContract.approve(CONFIG.ESCROW_PROXY, amount);
+  return tx.wait();
 }
 async function approveUsdt(amount) {
-  const data = SEL.approve + encodeAddress(CONFIG.ESCROW_PROXY) + encodeUint256(amount);
-  return sendTx(CONFIG.USDT_TOKEN, data);
+  const tx = await usdtContract.approve(CONFIG.ESCROW_PROXY, amount);
+  return tx.wait();
 }
 async function callCommitTrade(commitHash) {
-  const data = SEL.commitTrade + encodeBytes32(commitHash);
-  const receipt = await sendTx(CONFIG.ESCROW_PROXY, data);
-  // 로그에서 tradeId 파싱
-  return receipt.logs?.[0]?.topics?.[1] || '0x' + '0'.repeat(64);
+  const tx = await escrowContract.commitTrade(commitHash);
+  const receipt = await tx.wait();
+  // TradeCommitted 이벤트에서 tradeId 파싱
+  const event = receipt.events?.find(e => e.event === 'TradeCommitted');
+  return event?.args?.tradeId || receipt.logs?.[0]?.topics?.[1];
 }
 async function callRevealAndDeposit(tradeId, mpcAmt, price, krw, secret) {
-  const data = SEL.revealAndDeposit +
-    encodeBytes32(tradeId) + encodeUint256(mpcAmt) + encodeUint256(price) +
-    encodeUint256(krw) + encodeBytes32(secret);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.revealAndDeposit(tradeId, mpcAmt, price, krw, secret);
+  return tx.wait();
 }
 async function callBuyerDeposit(tradeId) {
-  const data = SEL.buyerDeposit + encodeBytes32(tradeId);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.buyerDeposit(tradeId);
+  return tx.wait();
 }
 async function callConfirm(tradeId) {
-  const data = SEL.confirmTrade + encodeBytes32(tradeId);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.confirmTrade(tradeId);
+  return tx.wait();
 }
 async function callCancel(tradeId) {
-  const data = SEL.cancelTrade + encodeBytes32(tradeId);
-  return sendTx(CONFIG.ESCROW_PROXY, data);
+  const tx = await escrowContract.cancelTrade(tradeId);
+  return tx.wait();
+}
+async function callExpire(tradeId) {
+  const tx = await escrowContract.expireTrade(tradeId);
+  return tx.wait();
 }
 async function fetchTrade(tradeId) {
-  const data = SEL.getTrade + encodeBytes32(tradeId);
-  const res = await callRpc('eth_call', [{ to: CONFIG.ESCROW_PROXY, data }, 'latest']);
-  if (!res || res === '0x') return null;
-  // 간단 파싱 (실제 배포 시 ethers.js decodeFunctionResult 사용)
-  return parseTrade(res);
+  if (!escrowContract) return null;
+  try {
+    const t = await escrowContract.getTrade(tradeId);
+    return {
+      seller: t.seller, buyer: t.buyer,
+      mpcAmount: t.mpcAmount, usdtPricePerMPC: t.usdtPricePerMPC,
+      usdtAmount: t.usdtAmount, krwPerUsdt: t.krwPerUsdt,
+      createdAt: t.createdAt, status: t.status,
+    };
+  } catch { return null; }
 }
 async function getRemainingTime(tradeId) {
-  const data = SEL.getRemainingTime + encodeBytes32(tradeId);
-  const res = await callRpc('eth_call', [{ to: CONFIG.ESCROW_PROXY, data }, 'latest']);
-  return res ? parseInt(res, 16) : 0;
-}
-function parseTrade(hex) {
-  // 실제 배포 시 ethers.js로 대체
-  const raw = hex.replace('0x','');
-  return {
-    seller:            '0x' + raw.slice(24,64),
-    buyer:             '0x' + raw.slice(88,128),
-    mpcAmount:         BigInt('0x' + raw.slice(128,192) || '0'),
-    usdtPricePerMPC:   BigInt('0x' + raw.slice(192,256) || '0'),
-    usdtAmount:        BigInt('0x' + raw.slice(256,320) || '0'),
-    krwPerUsdt:        BigInt('0x' + raw.slice(320,384) || '0'),
-    createdAt:         parseInt(raw.slice(384,448), 16),
-    status:            parseInt(raw.slice(512,576), 16),
-  };
-}
-
-async function checkPolBalance() {
+  if (!escrowContract) return 0;
   try {
-    const bal = await callRpc('eth_getBalance', [walletAddress, 'latest']);
-    const balPol = parseInt(bal, 16) / 1e18;
-    return balPol >= CONFIG.MIN_POL_GAS;
-  } catch { return true; }
+    const r = await escrowContract.getRemainingTime(tradeId);
+    return r.toNumber();
+  } catch { return 0; }
+}
+async function checkPolBalance() {
+  if (!window.__ethersProvider || !walletAddress) return true;
+  const bal = await window.__ethersProvider.getBalance(walletAddress);
+  return bal.gt(ethers.utils.parseEther('0.001'));
 }
 
-// ── commit hash 계산 ──────────────────────────────────────────────────────
-async function calcCommitHash(secret, mpcWei, priceWei, krwBig) {
-  // keccak256(abi.encodePacked(secret, mpcAmount, usdtPricePerMPC, krwPerUsdt))
-  // 브라우저에서 SubtleCrypto로 keccak256은 지원 안 됨 → js-sha3 필요
-  // 실제 배포 시 ethers.utils.solidityKeccak256 사용:
-  //   return ethers.solidityPackedKeccak256(['bytes32','uint256','uint256','uint256'],[secret,mpcWei,priceWei,krwBig])
-  // 여기서는 placeholder
-  const encoder = new TextEncoder();
-  const combined = secret + mpcWei.toString(16).padStart(64,'0') + priceWei.toString(16).padStart(64,'0') + krwBig.toString(16).padStart(64,'0');
-  const buf = encoder.encode(combined);
-  const hash = await crypto.subtle.digest('SHA-256', buf); // SHA-256 (배포 시 keccak256으로 변경)
-  return '0x' + Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+// ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
+function calcCommitHash(secret, mpcWei, priceWei, krwBig) {
+  return ethers.utils.solidityKeccak256(
+    ['bytes32', 'uint256', 'uint256', 'uint256'],
+    [secret, mpcWei, priceWei, krwBig]
+  );
 }
 
 // ── 숫자 변환 헬퍼 ────────────────────────────────────────────────────────
-function bigIntMpc(n)  { return BigInt(Math.round(n * 1e18)); }
-function bigIntUsdt(n) { return BigInt(Math.round(n * 1e6)); }
+function bigIntMpc(n)  { return ethers.utils.parseUnits(n.toString(), 18); }
+function bigIntUsdt(n) { return ethers.utils.parseUnits(n.toFixed(6), 6); }
 
 // ── localStorage ──────────────────────────────────────────────────────────
 const STORAGE_KEY = 'mpc_escrow_trades';
@@ -1305,9 +1490,12 @@ function saveTrade(tradeId, data) {
   trades[tradeId] = data;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
 }
+function saveLocalTrades(trades) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
+}
 function updateLocalTradeStatus(tradeId, status) {
   const trades = getLocalTrades();
-  if (trades[tradeId]) { trades[tradeId].status = status; localStorage.setItem(STORAGE_KEY, JSON.stringify(trades)); }
+  if (trades[tradeId]) { trades[tradeId].status = status; saveLocalTrades(trades); }
 }
 function loadLocalTrades() { pendingTrades = getLocalTrades(); }
 
@@ -1366,12 +1554,21 @@ function showAddrConfirm(addr) {
       `<span class="hi">${addr.slice(0,6)}</span>${addr.slice(6,-4)}<span class="hi">${addr.slice(-4)}</span>`;
     document.getElementById('modalAddrConfirm').classList.add('show');
     const okBtn = document.getElementById('addrConfirmOk');
-    const handler = () => {
+    const cancelBtn = document.querySelector('#modalAddrConfirm .btn-outline');
+    const okHandler = () => {
       closeModal('modalAddrConfirm');
-      okBtn.removeEventListener('click', handler);
+      okBtn.removeEventListener('click', okHandler);
+      cancelBtn.removeEventListener('click', cancelHandler);
       resolve(true);
     };
-    okBtn.addEventListener('click', handler);
+    const cancelHandler = () => {
+      closeModal('modalAddrConfirm');
+      okBtn.removeEventListener('click', okHandler);
+      cancelBtn.removeEventListener('click', cancelHandler);
+      resolve(false);
+    };
+    okBtn.addEventListener('click', okHandler);
+    cancelBtn.addEventListener('click', cancelHandler);
   });
 }
 
@@ -1422,10 +1619,24 @@ function parseError(err) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 </script>
 
-<!-- ethers.js CDN (프로덕션 권장) -->
-<!-- <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script> -->
+<!-- ethers.js v5 -->
+<script>
+// ethers.js 로드 (fallback 포함)
+(function() {
+  function loadEthers(url, fallback) {
+    var s = document.createElement('script');
+    s.src = url;
+    s.onerror = function() { if (fallback) loadEthers(fallback); };
+    document.head.appendChild(s);
+  }
+  loadEthers(
+    'https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js'
+  );
+})();
+</script>
 
-<!-- WalletConnect v2 CDN (프로덕션 필수) -->
-<!-- <script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script> -->
+<!-- AppKit: Trust Wallet 내장 브라우저에서는 window.ethereum 사용, PC는 미지원 -->
+<script>window.__appKit = null; window.__appKitReady = false;</script>
 </body>
 </html>
