@@ -1088,6 +1088,15 @@ async function loadUserTrades() {
   const trades = getLocalTrades();
   renderStatusList(trades);
   renderHistoryList(trades);
+
+  // 진행 중 거래는 체인 상태와 동기화
+  const active = Object.values(trades).filter(t => t.status === 'PENDING' || t.status === 'ACTIVE');
+  if (active.length > 0 && escrowContract) {
+    await Promise.all(active.map(t => syncTradeStatusFromChain(t.tradeId)));
+    const synced = getLocalTrades();
+    renderStatusList(synced);
+    renderHistoryList(synced);
+  }
 }
 
 function renderStatusList(trades) {
@@ -1119,6 +1128,35 @@ function tradeItemHtml(t) {
   const partnerShort = partner !== '—' ? `<span style="color:var(--primary)">${partner.slice(0,6)}</span>...${partner.slice(-4)}` : '—';
   const scanLink = `${CONFIG.EXPLORER}/address/${CONFIG.ESCROW_PROXY}`;
 
+  // 만료 여부 계산 (PENDING 상태에서 10분 경과)
+  const now = Date.now();
+  const isExpiredTime = t.status === 'PENDING' && t.createdAt && (now - t.createdAt) > CONFIG.TRADE_TIMEOUT * 1000;
+  const remainMs = t.createdAt ? Math.max(0, (t.createdAt + CONFIG.TRADE_TIMEOUT * 1000) - now) : 0;
+  const remainMin = Math.floor(remainMs / 60000);
+  const remainSec = Math.floor((remainMs % 60000) / 1000);
+
+  let buttons = '';
+  if (t.status === 'PENDING') {
+    if (isExpiredTime) {
+      buttons = `<button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="expireTradeById('${t.tradeId}')">⏰ 만료 처리 및 MPC 반환</button>`;
+    } else {
+      buttons = `
+        <div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ 만료까지 ${remainMin}분 ${remainSec}초</div>
+        <button class="btn btn-sm btn-danger" style="margin-top:8px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
+    }
+  } else if (t.status === 'ACTIVE') {
+    if (role === '판매자') {
+      buttons = `
+        <div class="info-box" style="margin-top:10px;font-size:12px">✅ 구매자가 USDT를 예치했습니다. 확인 후 거래를 확정하세요.</div>
+        <button class="btn btn-sm btn-success" style="margin-top:8px" onclick="confirmTradeById('${t.tradeId}')">✅ 거래 확정 (MPC 전송 + USDT 수령)</button>
+        <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 (양측 반환)</button>`;
+    } else {
+      buttons = `
+        <div class="info-box" style="margin-top:10px;font-size:12px">⏳ 판매자의 거래 확정을 기다리는 중입니다.</div>
+        <button class="btn btn-sm btn-danger" style="margin-top:8px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 (양측 반환)</button>`;
+    }
+  }
+
   return `<div class="trade-item">
     <div class="trade-item-header">
       <span class="badge badge-${badgeMap[t.status]||'pending'}">${statusMap[t.status]||t.status}</span>
@@ -1134,8 +1172,7 @@ function tradeItemHtml(t) {
       <a class="polygonscan-link" href="${scanLink}" target="_blank">Polygonscan ↗</a>
     </div>
     <div style="font-size:12px;color:var(--text3);margin-top:6px">상대방: ${partnerShort}</div>
-    ${t.status === 'PENDING' && role === '판매자' ? `<button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="cancelTradeById('${t.tradeId}')">취소 및 반환</button>` : ''}
-    ${t.status === 'ACTIVE' && role === '판매자' ? `<button class="btn btn-sm btn-success" style="margin-top:10px" onclick="confirmTradeById('${t.tradeId}')">거래 확정</button>` : ''}
+    ${buttons}
   </div>`;
 }
 
@@ -1159,6 +1196,38 @@ async function confirmTradeById(tradeId) {
     showToast('🎉 거래 완료! USDT가 입금됩니다');
     loadUserTrades();
   } catch(err) { showError(parseError(err)); }
+}
+
+async function expireTradeById(tradeId) {
+  const ok = await showConfirm('만료 처리', '10분이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
+  if (!ok) return;
+  try {
+    await callExpire(tradeId);
+    updateLocalTradeStatus(tradeId, 'EXPIRED');
+    showToast('✅ 만료 처리 완료! MPC가 반환됩니다');
+    loadUserTrades();
+  } catch(err) { showError(parseError(err)); }
+}
+
+// 체인에서 실제 거래 상태 동기화
+async function syncTradeStatusFromChain(tradeId) {
+  try {
+    const onChain = await fetchTrade(tradeId);
+    if (!onChain) return;
+    const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
+    const chainStatus = statusArr[Number(onChain.status)] || null;
+    if (chainStatus && chainStatus !== 'NONE') {
+      updateLocalTradeStatus(tradeId, chainStatus);
+      // ACTIVE 상태면 구매자 주소도 업데이트
+      if (chainStatus === 'ACTIVE' && onChain.buyer) {
+        const trades = getLocalTrades();
+        if (trades[tradeId]) {
+          trades[tradeId].buyer = onChain.buyer;
+          saveLocalTrades(trades);
+        }
+      }
+    }
+  } catch(e) {}
 }
 
 // ── 스마트 컨트랙트 호출 (ethers.js + Reown AppKit) ───────────────────────
@@ -1192,6 +1261,10 @@ async function callConfirm(tradeId) {
 }
 async function callCancel(tradeId) {
   const tx = await escrowContract.cancelTrade(tradeId);
+  return tx.wait();
+}
+async function callExpire(tradeId) {
+  const tx = await escrowContract.expireTrade(tradeId);
   return tx.wait();
 }
 async function fetchTrade(tradeId) {
