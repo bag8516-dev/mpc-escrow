@@ -942,7 +942,13 @@ async function createTradeFlow() {
 
     await callRevealAndDeposit(tradeId, mpcWei, priceWei, krwInt, secretHex);
 
-    // 7. 로컬 저장
+    // 7. 체인에서 거래 존재 확인 (잘못된 링크 방지)
+    const verifyTrade = await fetchTrade(tradeId);
+    if (!verifyTrade || Number(verifyTrade.status) !== 2) {
+      throw new Error(`거래 생성은 완료됐지만 체인에서 확인되지 않습니다.\nPolygonscan에서 트랜잭션을 확인해주세요.\ntradeId: ${tradeId}`);
+    }
+
+    // 8. 로컬 저장
     saveTrade(tradeId, {
       tradeId, seller: walletAddress, mpcAmt, pricePerMpc, usdtCeil, krwPerUsdt,
       createdAt: Date.now(), status: 'PENDING', secret: secretHex
