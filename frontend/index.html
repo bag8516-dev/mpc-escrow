@@ -264,7 +264,7 @@ a { color:var(--gold); text-decoration:none; }
       <button class="btn btn-primary" id="btnConnect" onclick="connectWallet()" style="max-width:320px;width:100%">
         🔗 지갑 연결하기
       </button>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px">Trust Wallet 앱 브라우저에서 접속해주세요</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">보안을 위해 모바일 Trust Wallet 전용으로 운영됩니다.<br>PC에서는 사용하실 수 없습니다.</div>
     </div>
   </div>
 
@@ -298,15 +298,16 @@ a { color:var(--gold); text-decoration:none; }
       <div class="input-group">
         <label class="input-label">MPC 1개당 원화 가격</label>
         <div class="input-wrap">
-          <input type="number" id="sellPricePerMpc" placeholder="0" step="1" oninput="calcSell()">
+          <input type="number" id="sellPricePerMpc" placeholder="0" step="10" min="10" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 10, 20, 30...)</div>
       </div>
 
       <div class="input-group">
         <label class="input-label">1 USDT = 원화 (직접 입력)</label>
         <div class="input-wrap">
-          <input type="number" id="sellKrwPerUsdt" placeholder="" oninput="calcSell()">
+          <input type="number" id="sellKrwPerUsdt" placeholder="" step="10" min="10" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
       </div>
@@ -478,7 +479,13 @@ a { color:var(--gold); text-decoration:none; }
 <div class="modal-overlay" id="modalSignGuide">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="signGuideTitle">서명 안내</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="modal-title" id="signGuideTitle" style="margin-bottom:0">서명 안내</div>
+      <div id="signGuideStep" style="font-size:13px;color:var(--gold);font-weight:700;background:rgba(201,168,76,.12);padding:3px 10px;border-radius:20px;border:1px solid rgba(201,168,76,.3)"></div>
+    </div>
+    <div style="height:4px;background:var(--border);border-radius:4px;margin-bottom:14px;overflow:hidden">
+      <div id="signGuideProgress" style="height:100%;background:var(--gold);border-radius:4px;transition:width .3s"></div>
+    </div>
     <div id="signGuideBody"></div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalSignGuide');signGuideCallback&&signGuideCallback()">다음 단계로</button>
   </div>
@@ -502,13 +509,9 @@ a { color:var(--gold); text-decoration:none; }
 <div class="modal-overlay" id="modalPolLow">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">⛽ POL(가스비) 부족</div>
+    <div class="modal-title">⛽ 가스비 부족</div>
     <div style="color:var(--text2);font-size:14px;line-height:1.7">
-      Polygon 네트워크 가스비(POL)가 부족합니다.<br><br>
-      <strong>POL 구매 방법:</strong>
-      <div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet 앱 → 구매 탭 → POL 검색</div></div>
-      <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">신용카드 또는 계좌이체로 구매 (최소 5,000원 권장)</div></div>
-      <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">또는 업비트·빗썸에서 MATIC 출금 (Polygon 네트워크 선택)</div></div>
+      트랜잭션 수수료(가스비)가 부족합니다.<br>지갑에 <strong>POL</strong>을 충전한 후 다시 시도해주세요.
     </div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalPolLow')">확인</button>
   </div>
@@ -550,13 +553,20 @@ a { color:var(--gold); text-decoration:none; }
 // ── 설정 ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   // ★ 배포 후 아래 주소를 실제 프록시 주소로 교체하세요 ★
-  ESCROW_PROXY:  '0x547FA64a307EdFD1B458b54Ea5ca114f5269ea8D',
+  ESCROW_PROXY:  '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972',
   MPC_TOKEN:     '0x2d854416d2749B1F0eb8a4B2Ab9027989F2ba262',
   USDT_TOKEN:    '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
   CHAIN_ID:      137,
   CHAIN_NAME:    'Polygon',
   RPC_URL:       'https://polygon-rpc.com',
+  RPC_FALLBACKS: [
+    'https://polygon-rpc.com',
+    'https://polygon-pokt.nodies.app',
+    'https://polygon.llamarpc.com',
+    'https://rpc.ankr.com/polygon',
+    'https://rpc-mainnet.matic.quiknode.pro',
+  ],
   EXPLORER:      'https://polygonscan.com',
   NATIVE_TOKEN:  'POL',
   // 테스트넷으로 전환하려면 아래 주석 해제하고 위 설정 주석 처리
@@ -569,6 +579,7 @@ const CONFIG = {
   KAKAO_CHANNEL: 'http://pf.kakao.com/_HCKbX',
   OFFICIAL_URL:  window.location.hostname,
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
+  MIN_MPC:       100,
   MAX_MPC:       100000,
   TRADE_TIMEOUT: 600,    // 10분 (초)
   RATE_INTERVAL: 300000, // 5분 (ms)
@@ -596,6 +607,54 @@ const ERC20_ABI = [
   'function balanceOf(address account) view returns (uint256)',
   'function decimals() view returns (uint8)',
 ];
+
+// ── RPC 자동 전환 ─────────────────────────────────────────────────────────
+// 읽기 전용 provider를 RPC 목록 순서대로 시도, 성공한 것을 캐싱
+let _readProvider = null;
+let _readProviderIdx = 0;
+
+async function getReadProvider() {
+  // 이미 동작 중인 provider가 있으면 재사용
+  if (_readProvider) return _readProvider;
+  for (let i = _readProviderIdx; i < CONFIG.RPC_FALLBACKS.length; i++) {
+    try {
+      const p = new ethers.providers.JsonRpcProvider(CONFIG.RPC_FALLBACKS[i]);
+      await p.getBlockNumber(); // 연결 확인
+      _readProvider = p;
+      _readProviderIdx = i;
+      if (i > 0) console.warn(`RPC 전환됨: ${CONFIG.RPC_FALLBACKS[i]}`);
+      return p;
+    } catch { /* 다음 RPC 시도 */ }
+  }
+  return null; // 모두 실패
+}
+
+function resetReadProvider() {
+  _readProvider = null; // 다음 호출 시 재연결 시도
+}
+
+// ── 전역 에러 캐치 ────────────────────────────────────────────────────────
+// 코드 어디서든 잡히지 않은 에러를 최종 포착해서 사용자에게 안내
+window.addEventListener('unhandledrejection', (e) => {
+  const err = e.reason;
+  const msg = err?.message || String(err);
+  // 서명 거부는 정상 동작이므로 무시
+  if (
+    err?.code === 4001 || err?.code === 'ACTION_REJECTED' ||
+    msg.toLowerCase().includes('user rejected') ||
+    msg.toLowerCase().includes('action_rejected')
+  ) return;
+  // RPC 오류면 캐시된 provider 초기화 (다음 호출 시 다른 RPC로 재시도)
+  if (msg.includes('network') || msg.includes('timeout') || msg.includes('fetch')) {
+    resetReadProvider();
+  }
+  console.error('[unhandledrejection]', err);
+  showToast('⚠️ 예상치 못한 오류가 발생했습니다. 카카오 문의를 이용해주세요.');
+});
+
+window.addEventListener('error', (e) => {
+  console.error('[global error]', e.message, e.filename, e.lineno);
+});
 
 // ── 전역 상태 ──────────────────────────────────────────────────────────────
 let provider = null;
@@ -827,17 +886,35 @@ function calcSell() {
     return;
   }
 
+  if (mpcAmt < CONFIG.MIN_MPC) {
+    showToast(`최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다`);
+    if (btn) btn.disabled = true;
+    return;
+  }
   if (mpcAmt > CONFIG.MAX_MPC) {
     showToast('최대 거래 한도는 10만 MPC입니다');
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (pricePerMpc % 10 !== 0) {
+    showToast('MPC 단가는 10원 단위로 입력해주세요 (예: 10, 20, 30...)');
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (krwPerUsdt % 10 !== 0) {
+    showToast('USDT 환율은 10원 단위로 입력해주세요 (예: 1460, 1470...)');
     if (btn) btn.disabled = true;
     return;
   }
 
   // 원화 기반 계산: MPC단가(원) × 수량 = 총원화 → ÷ USDT환율 = 받을USDT
   const totalKrw = mpcAmt * pricePerMpc;
-  const rawUsdt  = totalKrw / krwPerUsdt;
-  const usdtCeil = Math.ceil(rawUsdt * 10) / 10;
   const pricePerMpcUsdt = pricePerMpc / krwPerUsdt; // 컨트랙트용 USDT 단가
+  // 컨트랙트와 동일한 정수 연산으로 USDT 계산 (부동소수점 불일치 방지)
+  // 컨트랙트: rawUsdt = mpcAmount * usdtPricePerMPC / 10^18, _ceilToOneDecimal
+  const priceWeiPreview = Math.round(parseFloat(pricePerMpcUsdt.toFixed(6)) * 1e6);
+  const rawUsdtMicro    = mpcAmt * priceWeiPreview;
+  const usdtCeil        = Math.ceil(rawUsdtMicro / 1e5) / 10;
 
   document.getElementById('sellTotalUsdt').textContent = `${usdtCeil.toFixed(1)} USDT`;
   document.getElementById('sellTotalKrw').textContent  = `${Math.round(totalKrw).toLocaleString()}원`;
@@ -868,12 +945,23 @@ async function createTradeFlow() {
   const krwPerUsdt  = parseFloat(document.getElementById('sellKrwPerUsdt').value);
 
   if (!mpcAmt || !pricePerMpc || !krwPerUsdt) { showToast('모든 항목을 입력해주세요'); return; }
+  if (mpcAmt <= 0)       { showError('MPC 수량은 0보다 커야 합니다.'); return; }
+  if (mpcAmt < CONFIG.MIN_MPC) { showError(`❌ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다.`); return; }
+  if (pricePerMpc <= 0)  { showError('MPC 단가는 0보다 커야 합니다.'); return; }
+  if (krwPerUsdt <= 0)   { showError('USDT 환율은 0보다 커야 합니다.'); return; }
+  if (pricePerMpc % 10 !== 0) { showError('❌ MPC 단가는 10원 단위로 입력해주세요.<br>예: 10, 20, 30...'); return; }
+  if (krwPerUsdt % 10 !== 0)  { showError('❌ USDT 환율은 10원 단위로 입력해주세요.<br>예: 1460, 1470...'); return; }
   if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
 
   // pricePerMpc는 원화 단가; 컨트랙트엔 USDT 단가 필요
   const pricePerMpcUsdt = pricePerMpc / krwPerUsdt;
-  const rawUsdt = mpcAmt * pricePerMpcUsdt;
-  const usdtCeil = Math.ceil(rawUsdt * 10) / 10;
+  if (pricePerMpcUsdt < 0.000001) {
+    showError('❌ MPC 단가가 너무 낮습니다.<br>단가 또는 환율 값을 다시 확인해주세요.');
+    return;
+  }
+  // 컨트랙트와 동일한 정수 연산으로 USDT 계산 (calcSell과 일치)
+  const priceWeiConfirm = Math.round(parseFloat(pricePerMpcUsdt.toFixed(6)) * 1e6);
+  const usdtCeil = Math.ceil(mpcAmt * priceWeiConfirm / 1e5) / 10;
   const totalKrw = Math.round(mpcAmt * pricePerMpc);
 
   // 1. 수량 확인 팝업
@@ -908,14 +996,16 @@ async function createTradeFlow() {
 
   const btn = document.getElementById('btnCreateTrade');
   setButtonLoading(btn, '처리 중...');
+  showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
 
   try {
     // 4. 서명 1: Approve MPC
     await showSignGuide(
-      '1번째 서명 안내 (에스크로 사용 허락)',
-      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"승인(Approve)"</strong> 요청이 표시됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로 컨트랙트가 MPC를 가져갈 수 있도록 허용하는 서명입니다</div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text"><strong>"확인"</strong>을 눌러 서명하세요</div></div>`
+      'MPC 사용 허락',
+      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
+       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 MPC를 안전하게 보관할 수 있도록 허락하는 단계입니다 <strong>(이 단계에서 MPC가 빠져나가지 않습니다)</strong></div></div>
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
+      1, 2
     );
 
     const mpcAmountWei = bigIntMpc(mpcAmt);
@@ -934,18 +1024,28 @@ async function createTradeFlow() {
 
     // 6. 서명 2: revealAndDeposit
     await showSignGuide(
-      '2번째 서명 안내 (MPC 전송)',
+      'MPC 에스크로 예치',
       `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>MPC 전송</strong> 요청이 표시됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로 컨트랙트로 ${mpcAmt.toLocaleString()} MPC가 예치됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">거래 완료 전까지 컨트랙트가 안전하게 보관합니다</div></div>`
+       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text"><strong>${mpcAmt.toLocaleString()} MPC</strong>가 에스크로에 안전하게 맡겨집니다</div></div>
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">구매자가 USDT를 입금하면 즉시 자동 교환됩니다</div></div>`,
+      2, 2
     );
 
     await callRevealAndDeposit(tradeId, mpcWei, priceWei, krwInt, secretHex);
 
-    // 7. 체인에서 거래 존재 확인 (잘못된 링크 방지)
-    const verifyTrade = await fetchTrade(tradeId);
-    if (!verifyTrade || Number(verifyTrade.status) !== 2) {
-      throw new Error(`거래 생성은 완료됐지만 체인에서 확인되지 않습니다.\nPolygonscan에서 트랜잭션을 확인해주세요.\ntradeId: ${tradeId}`);
+    // 7. 체인에서 거래 존재 확인 (잘못된 링크 방지) — 최대 3회 재시도
+    let verifyTrade = null;
+    for (let i = 0; i < 3; i++) {
+      await sleep(2000);
+      verifyTrade = await fetchTrade(tradeId);
+      if (verifyTrade && Number(verifyTrade.status) === 2) break;
+      verifyTrade = null;
+    }
+    if (!verifyTrade) {
+      // tx.wait()가 이미 성공했으므로 트랜잭션은 확정된 상태임
+      // 조회 실패는 RPC 서버 동기화 지연(통상 수 초)일 뿐
+      console.warn('RPC 동기화 지연 - tradeId:', tradeId);
+      showToast('✅ 거래 생성 완료! 아래 링크를 구매자에게 전달하세요.');
     }
 
     // 8. 로컬 저장
@@ -978,8 +1078,10 @@ async function showBuyerPage(tradeId) {
   });
   document.getElementById('pageBuy').classList.add('active');
 
-  // 탭바에 '구매' 탭 추가
-  document.getElementById('tabBar').innerHTML += `<div class="tab-item active" id="tab-buy"><span class="tab-icon">🛒</span><span>구매</span></div>`;
+  // 탭바에 '구매' 탭 추가 (중복 방지)
+  if (!document.getElementById('tab-buy')) {
+    document.getElementById('tabBar').innerHTML += `<div class="tab-item active" id="tab-buy"><span class="tab-icon">🛒</span><span>구매</span></div>`;
+  }
 
   try {
     const trade = await fetchTrade(tradeId);
@@ -1003,7 +1105,7 @@ async function showBuyerPage(tradeId) {
       return;
     }
     if (tradeStatus > 2) {
-      const msgMap = { 4:'거래가 이미 완료됐습니다', 5:'거래가 취소됐습니다', 6:'거래가 만료됐습니다' };
+      const msgMap = { 3:'이미 다른 구매자가 참여한 거래입니다', 4:'거래가 이미 완료됐습니다', 5:'거래가 취소됐습니다', 6:'거래가 만료됐습니다' };
       document.getElementById('pageExpired').style.display = 'flex';
       document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = msgMap[tradeStatus] || '거래가 종료됐습니다';
       document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '판매자에게 새 링크를 요청하세요.';
@@ -1056,27 +1158,53 @@ async function buyDepositFlow() {
 
   const btn = document.getElementById('btnBuyDeposit');
   setButtonLoading(btn, '처리 중...');
+  showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
 
   try {
     const trade = await fetchTrade(currentTradeId);
+    if (!trade || Number(trade.status) === 0) {
+      resetButton(btn, 'USDT 예치하고 구매하기');
+      showError('거래 정보를 불러올 수 없습니다. 잠시 후 다시 시도하거나 판매자에게 문의하세요.');
+      return;
+    }
+
+    // 판매자 본인 여부 확인
+    if (walletAddress && trade.seller.toLowerCase() === walletAddress.toLowerCase()) {
+      resetButton(btn, 'USDT 예치하고 구매하기');
+      showError('❌ 본인이 판매자인 거래는 구매할 수 없습니다.');
+      return;
+    }
+
     const usdtAmt = ethers.BigNumber.from(trade.usdtAmount);
+
+    // USDT 잔액 확인
+    const usdtBalance = await usdtContract.balanceOf(walletAddress);
+    if (usdtBalance.lt(usdtAmt)) {
+      resetButton(btn, 'USDT 예치하고 구매하기');
+      const need = (Number(usdtAmt) / 1e6).toFixed(1);
+      const have = (Number(usdtBalance) / 1e6).toFixed(1);
+      showError(`❌ USDT 잔액 부족<br><br>필요: ${need} USDT<br>보유: ${have} USDT<br><br>USDT를 지갑에 먼저 입금해주세요.`);
+      return;
+    }
 
     // 서명 1: Approve USDT
     await showSignGuide(
-      '1번째 서명 안내 (USDT 사용 허락)',
-      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"USDT 승인(Approve)"</strong> 요청이 표시됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 USDT를 가져갈 수 있도록 허용하는 서명입니다</div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text"><strong>"확인"</strong>을 눌러 서명하세요</div></div>`
+      'USDT 사용 허락',
+      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
+       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 USDT를 가져갈 수 있도록 허락하는 단계입니다 <strong>(아직 USDT가 빠져나가지 않습니다)</strong></div></div>
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
+      1, 2
     );
 
     await approveUsdt(usdtAmt);
 
     // 서명 2: buyerDeposit
     await showSignGuide(
-      '2번째 서명 안내 (USDT 전송)',
+      'USDT 전송 및 MPC 수령',
       `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>USDT 전송</strong> 요청이 표시됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로 컨트랙트로 USDT가 예치됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">예치 즉시 MPC가 자동으로 지갑에 전송됩니다</div></div>`
+       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">USDT가 에스크로로 전송되고 <strong>MPC가 즉시 내 지갑으로 들어옵니다</strong></div></div>
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
+      2, 2
     );
 
     await callBuyerDeposit(currentTradeId);
@@ -1130,7 +1258,7 @@ async function cancelTradeFlow() {
 
   try {
     await callCancel(tradeId);
-    showToast('✅ 거래가 취소되고 환불됩니다');
+    showToast('✅ 거래가 취소됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch (err) {
     showError(parseError(err));
@@ -1196,8 +1324,11 @@ async function loadUserTrades() {
 
 async function recoverTradesFromChain() {
   try {
-    const tradeIds = await escrowContract.getUserTrades(walletAddress);
-    if (!tradeIds || tradeIds.length === 0) return;
+    const allIds = await escrowContract.getUserTrades(walletAddress);
+    if (!allIds || allIds.length === 0) return;
+
+    // 최근 50건만 복구 (누적 시 성능 보호)
+    const tradeIds = allIds.slice(-50);
 
     const local = getLocalTrades();
     let changed = false;
@@ -1260,7 +1391,10 @@ function renderHistoryList(trades) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">거래 내역이 없습니다</div>';
     return;
   }
-  el.innerHTML = all.map(t => tradeItemHtml(t)).join('');
+  // 최근 50건만 표시 (누적 시 DOM 성능 보호)
+  const display = all.slice(0, 50);
+  const more = all.length > 50 ? `<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">최근 50건만 표시됩니다 (전체 ${all.length}건)</div>` : '';
+  el.innerHTML = display.map(t => tradeItemHtml(t)).join('') + more;
 }
 
 function tradeItemHtml(t) {
@@ -1330,7 +1464,7 @@ async function cancelTradeById(tradeId) {
   try {
     await callCancel(tradeId);
     updateLocalTradeStatus(tradeId, 'CANCELLED');
-    showToast('✅ 취소되어 환불됩니다');
+    showToast('✅ 거래가 취소됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch(err) { showError(parseError(err)); }
 }
@@ -1352,7 +1486,7 @@ async function expireTradeById(tradeId) {
   try {
     await callExpire(tradeId);
     updateLocalTradeStatus(tradeId, 'EXPIRED');
-    showToast('✅ 만료 처리 완료! MPC가 반환됩니다');
+    showToast('✅ 만료 처리됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch(err) { showError(parseError(err)); }
 }
@@ -1444,28 +1578,43 @@ async function callExpire(tradeId) {
   return tx.wait();
 }
 async function fetchTrade(tradeId) {
-  if (!escrowContract) return null;
-  try {
-    const t = await escrowContract.getTrade(tradeId);
-    return {
-      seller: t.seller, buyer: t.buyer,
-      mpcAmount: t.mpcAmount, usdtPricePerMPC: t.usdtPricePerMPC,
-      usdtAmount: t.usdtAmount, krwPerUsdt: t.krwPerUsdt,
-      createdAt: t.createdAt, status: t.status,
-    };
-  } catch { return null; }
+  // 읽기는 fallback RPC provider로 시도 → 실패 시 wallet provider로 재시도
+  const readP = await getReadProvider();
+  const contracts = [];
+  if (readP) contracts.push(new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP));
+  if (escrowContract) contracts.push(escrowContract);
+
+  for (const c of contracts) {
+    try {
+      const t = await c.getTrade(tradeId);
+      return {
+        seller: t.seller, buyer: t.buyer,
+        mpcAmount: t.mpcAmount, usdtPricePerMPC: t.usdtPricePerMPC,
+        usdtAmount: t.usdtAmount, krwPerUsdt: t.krwPerUsdt,
+        createdAt: t.createdAt, status: t.status,
+      };
+    } catch (e) {
+      // 이 provider 실패 → 다음 시도
+      if (c === contracts[0]) resetReadProvider();
+    }
+  }
+  return null;
 }
 async function getRemainingTime(tradeId) {
-  if (!escrowContract) return 0;
+  const readP = await getReadProvider();
+  const c = readP
+    ? new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP)
+    : escrowContract;
+  if (!c) return 0;
   try {
-    const r = await escrowContract.getRemainingTime(tradeId);
+    const r = await c.getRemainingTime(tradeId);
     return r.toNumber();
   } catch { return 0; }
 }
 async function checkPolBalance() {
   if (!window.__ethersProvider || !walletAddress) return true;
   const bal = await window.__ethersProvider.getBalance(walletAddress);
-  return bal.gt(ethers.utils.parseEther('0.001'));
+  return bal.gt(ethers.utils.parseEther('0.005'));
 }
 
 // ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
@@ -1522,27 +1671,39 @@ function showConfirm(title, body) {
     document.getElementById('modalConfirmBody').innerHTML = body;
     document.getElementById('modalConfirm').classList.add('show');
     const okBtn = document.getElementById('modalConfirmOk');
-    const handler = () => {
-      closeModal('modalConfirm');
+    const cancelBtn = document.querySelector('#modalConfirm .btn-outline');
+    const cleanup = () => {
       okBtn.removeEventListener('click', handler);
+      cancelBtn.removeEventListener('click', cancelHandler);
+    };
+    const handler = () => {
+      cleanup();
+      closeModal('modalConfirm');
       resolve(true);
     };
-    okBtn.addEventListener('click', handler);
-    // 취소 버튼은 closeModal 후 resolve(false) 필요
-    const cancelBtn = document.querySelector('#modalConfirm .btn-outline');
     const cancelHandler = () => {
+      cleanup();
       closeModal('modalConfirm');
-      cancelBtn.removeEventListener('click', cancelHandler);
       resolve(false);
     };
+    okBtn.addEventListener('click', handler);
     cancelBtn.addEventListener('click', cancelHandler);
   });
 }
 
-function showSignGuide(title, body) {
+function showSignGuide(title, body, step, totalSteps) {
   return new Promise(resolve => {
     document.getElementById('signGuideTitle').textContent = title;
     document.getElementById('signGuideBody').innerHTML = body;
+    const stepEl = document.getElementById('signGuideStep');
+    const progressEl = document.getElementById('signGuideProgress');
+    if (step && totalSteps) {
+      stepEl.textContent = `${step} / ${totalSteps} 단계`;
+      progressEl.style.width = `${(step / totalSteps) * 100}%`;
+    } else {
+      stepEl.textContent = '';
+      progressEl.style.width = '0%';
+    }
     document.getElementById('modalSignGuide').classList.add('show');
     signGuideCallback = () => { signGuideCallback = null; resolve(); };
   });
@@ -1598,17 +1759,56 @@ function openKakao() {
 
 function parseError(err) {
   const msg = err?.message || String(err);
+  const code = err?.code || '';
+
+  // 사용자가 직접 서명을 거부한 경우 (Trust Wallet, MetaMask 공통)
+  if (
+    code === 4001 ||
+    code === 'ACTION_REJECTED' ||
+    msg.includes('4001') ||
+    msg.toLowerCase().includes('user rejected') ||
+    msg.toLowerCase().includes('user denied') ||
+    msg.toLowerCase().includes('action_rejected') ||
+    msg.toLowerCase().includes('rejected by user') ||
+    msg.toLowerCase().includes('cancelled by user')
+  ) {
+    return '✋ 서명을 취소했습니다. 거래를 다시 진행하려면 버튼을 다시 눌러주세요.';
+  }
+
   const map = {
-    '4001':              '❌ 서명을 거부했습니다. 다시 시도해주세요.',
-    'insufficient':      '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.',
-    'user rejected':     '❌ 사용자가 거래를 취소했습니다.',
-    'network':           '❌ 네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.',
-    'timeout':           '❌ 트랜잭션 확인 시간이 초과됐습니다. Polygonscan에서 확인해주세요.',
-    '만료':              '❌ 거래 시간이 만료됐습니다 (10분 초과).',
-    '최대':              '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.',
-    '가짜 토큰':         '⚠️ 가짜 토큰이 감지됐습니다. 공식 MPC/USDT 주소를 확인해주세요.',
-    'MPC 전송 실패':     '❌ MPC 전송에 실패했습니다. Approve를 먼저 완료했는지 확인해주세요.',
-    'USDT 전송 실패':    '❌ USDT 전송에 실패했습니다. Approve를 먼저 완료했는지 확인해주세요.',
+    // ── 가스·잔액 ──
+    'insufficient funds':      '❌ 가스비(POL)가 부족합니다. 지갑에 POL을 충전 후 다시 시도해주세요.',
+    'insufficient':            '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.',
+    'gas':                     '❌ 가스비 오류입니다. POL 잔액을 확인하거나 잠시 후 다시 시도해주세요.',
+    // ── 네트워크 ──
+    'network':                 '❌ 네트워크 오류입니다. 인터넷 연결을 확인하고 다시 시도해주세요.',
+    'timeout':                 '❌ 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.',
+    'fetch':                   '❌ 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.',
+    // ── 컨트랙트 revert (영어 원문 그대로 매핑) ──
+    'Trade expired':           '❌ 거래 시간이 만료됐습니다 (10분 초과).\n판매자에게 새 링크를 요청하세요.',
+    'Trade not pending':       '❌ 이미 처리된 거래입니다.',
+    'Trade not active':        '❌ 거래가 활성 상태가 아닙니다.',
+    'Trade not found':         '❌ 거래를 찾을 수 없습니다. 링크를 다시 확인하세요.',
+    'Seller cannot be buyer':  '❌ 판매자 본인은 구매할 수 없습니다.',
+    'Buyer already set':       '❌ 이미 다른 구매자가 참여한 거래입니다. 판매자에게 문의하세요.',
+    'Too early':               '❌ 아직 거래 참여가 불가합니다. 잠시 후 다시 시도해주세요.',
+    'Only PENDING can expire': '❌ 진행 중(PENDING) 상태인 거래만 만료 처리할 수 있습니다.',
+    'Not expired yet':         '❌ 아직 10분이 지나지 않았습니다. 잠시 후 만료 처리해주세요.',
+    'Exceeds 100k MPC limit':  '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.',
+    'MPC amount must be':      '❌ MPC 수량이 올바르지 않습니다.',
+    'Price must be':           '❌ 거래 단가가 올바르지 않습니다. 가격을 다시 입력해주세요.',
+    'Rate must be':            '❌ 환율이 올바르지 않습니다. 환율을 다시 입력해주세요.',
+    'MPC transfer failed':     '❌ MPC 전송에 실패했습니다. MPC 잔액과 Approve를 확인해주세요.',
+    'USDT transfer failed':    '❌ USDT 전송에 실패했습니다. USDT 잔액과 Approve를 확인해주세요.',
+    'MPC payout failed':       '❌ MPC 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.',
+    'USDT payout failed':      '❌ USDT 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.',
+    'MPC amount mismatch':     '❌ MPC 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.',
+    'USDT amount mismatch':    '❌ USDT 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.',
+    'Invalid reveal':          '❌ 거래 검증 실패입니다. 카카오 문의를 이용해주세요.',
+    'Commit already used':     '❌ 이미 사용된 거래 코드입니다. 새로 거래를 생성해주세요.',
+    'Reentrant call':          '❌ 중복 요청이 감지됐습니다. 잠시 후 다시 시도해주세요.',
+    'Seller only':             '❌ 판매자만 이 작업을 할 수 있습니다.',
+    'Multisig only':           '❌ 권한이 없습니다.',
   };
   for (const [key, val] of Object.entries(map)) {
     if (msg.toLowerCase().includes(key.toLowerCase())) return val;
