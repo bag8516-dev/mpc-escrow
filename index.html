@@ -533,8 +533,8 @@ a { color:var(--gold); text-decoration:none; }
   </div>
 </div>
 
-<!-- 만료 링크 화면 (별도) -->
-<div id="pageExpired" style="display:none;text-align:center;padding:80px 20px;flex-direction:column;align-items:center;gap:16px">
+<!-- 만료 링크 화면 -->
+<div id="pageExpired" style="display:none;text-align:center;padding:80px 20px;flex-direction:column;align-items:center;gap:16px;position:fixed;inset:0;background:var(--navy);z-index:300;justify-content:center">
   <div style="font-size:60px">⌛</div>
   <div style="font-size:20px;font-weight:800">거래가 만료됐습니다</div>
   <div style="color:var(--text2);font-size:15px;line-height:1.7">판매자에게 새 링크를 요청해주세요.<br>거래는 생성 후 10분간만 유효합니다.</div>
@@ -1091,7 +1091,6 @@ async function showBuyerPage(tradeId) {
       document.getElementById('pageExpired').style.display = 'flex';
       document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래를 불러올 수 없습니다';
       document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '네트워크 오류이거나 유효하지 않은 링크입니다.<br>판매자에게 링크를 다시 받거나, 잠시 후 다시 시도해주세요.';
-      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
       return;
     }
     const tradeStatus = Number(trade.status);
@@ -1101,7 +1100,6 @@ async function showBuyerPage(tradeId) {
       document.getElementById('pageExpired').style.display = 'flex';
       document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래를 찾을 수 없습니다';
       document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '링크가 만료됐거나 잘못된 링크입니다.<br>판매자에게 새 링크를 요청하세요.';
-      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
       return;
     }
     if (tradeStatus > 2) {
@@ -1110,7 +1108,6 @@ async function showBuyerPage(tradeId) {
       document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = msgMap[tradeStatus] || '거래가 종료됐습니다';
       document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML = '판매자에게 새 링크를 요청하세요.';
       document.getElementById('pageBuy').classList.remove('active');
-      document.getElementById('app').appendChild(document.getElementById('pageExpired'));
       return;
     }
 
@@ -1222,31 +1219,6 @@ async function buyDepositFlow() {
   }
 }
 
-let buyerPollInterval = null;
-function startBuyerStatusPolling(tradeId) {
-  if (buyerPollInterval) clearInterval(buyerPollInterval);
-  buyerPollInterval = setInterval(async () => {
-    try {
-      const trade = await fetchTrade(tradeId);
-      if (!trade) return;
-      const status = Number(trade.status);
-      // 4 = COMPLETED
-      if (status === 4) {
-        clearInterval(buyerPollInterval);
-        document.getElementById('buyWaitArea').style.display = 'none';
-        document.getElementById('buyCompleteArea').style.display = 'block';
-      }
-      // 5 = CANCELLED, 6 = EXPIRED
-      if (status === 5 || status === 6) {
-        clearInterval(buyerPollInterval);
-        document.getElementById('buyWaitArea').style.display = 'none';
-        document.getElementById('buyCancelledMsg').textContent =
-          status === 5 ? '거래가 취소됐습니다' : '거래가 만료됐습니다';
-        document.getElementById('buyCancelledArea').style.display = 'block';
-      }
-    } catch(e) {}
-  }, 10000);
-}
 
 // ── 취소 플로우 ────────────────────────────────────────────────────────────
 async function cancelTradeFlow() {
@@ -1469,16 +1441,6 @@ async function cancelTradeById(tradeId) {
   } catch(err) { showError(parseError(err)); }
 }
 
-async function confirmTradeById(tradeId) {
-  const ok = await showConfirm('거래 확정', '구매자에게 MPC를 전송하고 USDT를 수령하시겠습니까?');
-  if (!ok) return;
-  try {
-    await callConfirm(tradeId);
-    updateLocalTradeStatus(tradeId, 'COMPLETED');
-    showToast('🎉 거래 완료! USDT가 입금됩니다');
-    loadUserTrades();
-  } catch(err) { showError(parseError(err)); }
-}
 
 async function expireTradeById(tradeId) {
   const ok = await showConfirm('만료 처리', '10분이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
