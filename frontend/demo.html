@@ -160,19 +160,19 @@ input { outline:none; border:none; font-family:inherit; color:var(--text); backg
       </div>
       <div class="input-group">
         <label class="input-label">MPC 1개당 원화 가격</label>
-        <div class="input-wrap"><input type="number" id="demoPricePerMpc" value="300" readonly><span class="input-unit">원</span></div>
+        <div class="input-wrap"><input type="number" id="demoPricePerMpc" value="1000" readonly><span class="input-unit">원</span></div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력</div>
       </div>
       <div class="input-group">
         <label class="input-label">1 USDT = 원화</label>
-        <div class="input-wrap"><input type="number" id="demoKrwPerUsdt" value="1480" readonly><span class="input-unit">원</span></div>
+        <div class="input-wrap"><input type="number" id="demoKrwPerUsdt" value="1530" readonly><span class="input-unit">원</span></div>
       </div>
       <div class="rate-box">
-        <div class="rate-row"><span class="rate-label">총 받을 USDT</span><span class="rate-value usdt" style="color:var(--usdt)">1,013.6 USDT</span></div>
-        <div class="rate-row"><span class="rate-label">총 원화 환산</span><span class="rate-value" style="color:#f4c542">1,500,000원</span></div>
+        <div class="rate-row"><span class="rate-label">총 받을 USDT</span><span class="rate-value usdt" style="color:var(--usdt)">3,268 USDT</span></div>
+        <div class="rate-row"><span class="rate-label">총 원화 환산</span><span class="rate-value" style="color:#f4c542">5,000,000원</span></div>
         <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
-        <div class="rate-row"><span class="rate-label">실시간 USDT/KRW</span><span class="rate-value rate-live">1,476원</span></div>
-        <div style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(46,204,113,.12);color:var(--success);display:inline-block;margin-top:4px">✅ 실시간 환율과 0.3% 차이 (정상 범위)</div>
+        <div class="rate-row"><span class="rate-label">실시간 USDT/KRW</span><span class="rate-value rate-live">1,528원</span></div>
+        <div style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(46,204,113,.12);color:var(--success);display:inline-block;margin-top:4px">✅ 실시간 환율과 0.1% 차이 (정상 범위)</div>
       </div>
       <div class="info-box">ℹ️ Approve → 예치 순서로 <strong>총 2번 서명</strong>이 필요합니다</div>
     </div>
@@ -188,13 +188,13 @@ input { outline:none; border:none; font-family:inherit; color:var(--text); backg
       <div class="card-title">🛒 거래 정보</div>
       <div class="trade-summary">
         <div class="summary-item"><div class="summary-key">판매 수량</div><div class="summary-val mpc">5,000 MPC</div></div>
-        <div class="summary-item"><div class="summary-key">MPC 단가</div><div class="summary-val usdt">0.2027 USDT</div></div>
-        <div class="summary-item"><div class="summary-key">총 USDT</div><div class="summary-val usdt">1,013.6 USDT</div></div>
-        <div class="summary-item"><div class="summary-key">총 원화 환산</div><div class="summary-val krw">1,500,000원</div></div>
+        <div class="summary-item"><div class="summary-key">MPC 단가</div><div class="summary-val usdt">0.6536 USDT</div></div>
+        <div class="summary-item"><div class="summary-key">총 USDT</div><div class="summary-val usdt">3,268 USDT</div></div>
+        <div class="summary-item"><div class="summary-key">총 원화 환산</div><div class="summary-val krw">5,000,000원</div></div>
       </div>
       <div class="rate-box" style="margin-top:12px">
-        <div class="rate-row"><span class="rate-label">판매자 설정 환율</span><span class="rate-value">1,480원</span></div>
-        <div class="rate-row"><span class="rate-label">실시간 환율 (CoinGecko)</span><span class="rate-value rate-live">1,476원</span></div>
+        <div class="rate-row"><span class="rate-label">판매자 설정 환율</span><span class="rate-value">1,530원</span></div>
+        <div class="rate-row"><span class="rate-label">실시간 환율 (CoinGecko)</span><span class="rate-value rate-live">1,528원</span></div>
       </div>
       <div class="warn-box">⚠️ 판매자 설정 환율과 실시간 환율이 다를 수 있습니다. 거래 전 반드시 확인하세요.</div>
     </div>
@@ -239,9 +239,9 @@ input { outline:none; border:none; font-family:inherit; color:var(--text); backg
     <div class="modal-title">거래 내용 확인</div>
     <div class="trade-summary" style="margin-bottom:12px">
       <div class="summary-item"><div class="summary-key">MPC 수량</div><div class="summary-val mpc">5,000 MPC</div></div>
-      <div class="summary-item"><div class="summary-key">총 USDT</div><div class="summary-val usdt">1,013.6 USDT</div></div>
-      <div class="summary-item"><div class="summary-key">총 원화</div><div class="summary-val krw">1,500,000원</div></div>
-      <div class="summary-item"><div class="summary-key">MPC 단가</div><div class="summary-val">300원</div></div>
+      <div class="summary-item"><div class="summary-key">총 USDT</div><div class="summary-val usdt">3,268 USDT</div></div>
+      <div class="summary-item"><div class="summary-key">총 원화</div><div class="summary-val krw">5,000,000원</div></div>
+      <div class="summary-item"><div class="summary-key">MPC 단가</div><div class="summary-val">1,000원</div></div>
     </div>
     <div style="color:var(--text2);font-size:14px">위 내용으로 거래를 생성하시겠습니까?</div>
     <div class="modal-actions">
