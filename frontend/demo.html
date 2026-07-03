@@ -135,7 +135,7 @@ input { outline:none; border:none; font-family:inherit; color:var(--text); backg
         <strong>Trust Wallet으로 안전하게 연결하세요</strong><br>
         WalletConnect 방식으로 연결됩니다
       </div>
-      <button class="btn btn-primary" id="btnConnect" onclick="demoConnect()" style="max-width:320px;width:100%">🔗 지갑 연결하기</button>
+      <button class="btn btn-primary" id="btnConnect" onclick="startAutoPlay()" style="max-width:320px;width:100%">🎬 자동 데모 시작</button>
       <div style="font-size:12px;color:var(--text3)">보안을 위해 모바일 Trust Wallet 전용으로 운영됩니다.<br>PC에서는 사용하실 수 없습니다.</div>
     </div>
   </div>
@@ -314,8 +314,6 @@ input { outline:none; border:none; font-family:inherit; color:var(--text); backg
 <script>
 'use strict';
 
-var demoSignStep = 1;
-var demoSignType = 'seller';
 var timerInterval = null;
 var demoSeconds = 585;
 
@@ -327,57 +325,41 @@ function showToast(msg, duration) {
   setTimeout(function() { t.classList.remove('show'); }, duration);
 }
 
-function closeModal(id) {
-  document.getElementById(id).classList.remove('show');
-}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function showModal(id)  { document.getElementById(id).classList.add('show'); }
 
-function showModal(id) {
-  document.getElementById(id).classList.add('show');
-}
+function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-function setStep(text) {
-  var el = document.getElementById('demoStepIndicator');
-  el.textContent = text;
-  el.style.display = text ? 'block' : 'none';
-}
-
-// ── 1단계: 지갑 연결 ──
-function demoConnect() {
+// ── 자동 진행 ──
+async function startAutoPlay() {
   var btn = document.getElementById('btnConnect');
   btn.innerHTML = '<span class="spinner-sm"></span> 연결 중...';
   btn.disabled = true;
-  setStep('① 지갑 연결 중...');
-  setTimeout(function() {
-    document.getElementById('pageConnect').classList.remove('active');
-    document.getElementById('mainHeader').style.display = 'flex';
-    document.getElementById('tabBar').style.display = 'flex';
-    document.getElementById('pageSell').classList.add('active');
-    document.getElementById('tab-sell').classList.add('active');
-    showToast('✅ Trust Wallet 연결 완료!');
-    setStep('② 판매 정보 입력');
-  }, 1500);
-}
 
-// ── 2단계: 거래 생성 ──
-function demoCreateTrade() {
-  setStep('③ 거래 내용 확인');
+  // 1. 지갑 연결
+  await wait(2000);
+  document.getElementById('pageConnect').classList.remove('active');
+  document.getElementById('mainHeader').style.display = 'flex';
+  document.getElementById('tabBar').style.display = 'flex';
+  document.getElementById('pageSell').classList.add('active');
+  showToast('✅ Trust Wallet 연결 완료!');
+
+  // 2. 판매 화면 보여주기
+  await wait(3000);
+
+  // 3. 거래 확인 모달
   showModal('modalConfirm');
-}
-
-function demoAfterConfirm() {
+  await wait(3000);
   closeModal('modalConfirm');
-  setStep('④ 지갑 주소 확인');
-  setTimeout(function() { showModal('modalAddr'); }, 300);
-}
 
-function demoAfterAddr() {
+  // 4. 주소 확인 모달
+  await wait(500);
+  showModal('modalAddr');
+  await wait(3000);
   closeModal('modalAddr');
-  setStep('⑤ 서명 1/2 — MPC 사용 허락');
-  setTimeout(function() { demoShowSign1(); }, 300);
-}
 
-function demoShowSign1() {
-  demoSignStep = 1;
+  // 5. 서명 1/2 — MPC Approve
+  await wait(500);
   document.getElementById('signTitle').textContent = 'MPC 사용 허락';
   document.getElementById('signStep').textContent = '1 / 2 단계';
   document.getElementById('signProgress').style.width = '50%';
@@ -385,23 +367,18 @@ function demoShowSign1() {
     '<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>' +
     '<div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 MPC를 안전하게 보관할 수 있도록 허락하는 단계입니다 <strong>(이 단계에서 MPC가 빠져나가지 않습니다)</strong></div></div>' +
     '<div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>';
-  document.getElementById('signNextBtn').onclick = demoAfterSign1;
   showModal('modalSign');
-}
-
-function demoAfterSign1() {
+  await wait(4000);
   closeModal('modalSign');
-  setStep('⑤ MPC Approve 처리 중...');
+
+  // 6. MPC Approve 처리 중
   document.getElementById('processingText').textContent = 'MPC 승인 처리 중...';
   showModal('modalProcessing');
-  setTimeout(function() {
-    closeModal('modalProcessing');
-    setStep('⑥ 서명 2/2 — MPC 예치');
-    demoShowSign2();
-  }, 2000);
-}
+  await wait(2500);
+  closeModal('modalProcessing');
 
-function demoShowSign2() {
+  // 7. 서명 2/2 — MPC 예치
+  await wait(500);
   document.getElementById('signTitle').textContent = 'MPC 에스크로 예치';
   document.getElementById('signStep').textContent = '2 / 2 단계';
   document.getElementById('signProgress').style.width = '100%';
@@ -409,45 +386,90 @@ function demoShowSign2() {
     '<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>MPC 전송</strong> 요청이 표시됩니다</div></div>' +
     '<div class="guide-step"><div class="guide-num">2</div><div class="guide-text"><strong>5,000 MPC</strong>가 에스크로에 안전하게 맡겨집니다</div></div>' +
     '<div class="guide-step"><div class="guide-num">3</div><div class="guide-text">구매자가 USDT를 입금하면 즉시 자동 교환됩니다</div></div>';
-  document.getElementById('signNextBtn').onclick = demoAfterSign2;
   showModal('modalSign');
-}
-
-function demoAfterSign2() {
+  await wait(4000);
   closeModal('modalSign');
-  setStep('⑥ MPC 예치 처리 중...');
+
+  // 8. MPC 예치 처리 중
   document.getElementById('processingText').textContent = '블록체인에 기록 중...';
   showModal('modalProcessing');
-  setTimeout(function() {
-    closeModal('modalProcessing');
-    setStep('⑦ 거래 생성 완료 — 링크 전송');
-    showModal('modalShare');
-  }, 2500);
-}
+  await wait(3000);
+  closeModal('modalProcessing');
 
-function demoCopyLink() {
-  var btn = document.getElementById('copyBtn');
-  btn.textContent = '복사됨!';
-  btn.classList.add('copied');
+  // 9. 링크 공유 모달
+  await wait(500);
+  showModal('modalShare');
+  await wait(1500);
+  // 링크 복사 효과
+  var copyBtn = document.getElementById('copyBtn');
+  copyBtn.textContent = '복사됨!';
+  copyBtn.classList.add('copied');
   showToast('✅ 링크 복사 완료! 카카오톡으로 전송하세요');
-  setTimeout(function() { btn.textContent = '복사'; btn.classList.remove('copied'); }, 2000);
-}
-
-// ── 3단계: 구매자 화면 ──
-function demoShowBuyerPage() {
+  await wait(2000);
+  copyBtn.textContent = '복사';
+  copyBtn.classList.remove('copied');
+  await wait(2000);
   closeModal('modalShare');
+
+  // 10. 구매자 화면 전환
+  await wait(500);
   document.getElementById('pageSell').classList.remove('active');
-  document.getElementById('tab-sell').classList.remove('active');
   document.getElementById('pageBuy').classList.add('active');
-
-  // 탭에 구매 추가
-  if (!document.getElementById('tab-buy')) {
-    document.getElementById('tabBar').innerHTML += '<div class="tab-item active" id="tab-buy"><span class="tab-icon">🛒</span><span>구매</span></div>';
-  }
-
-  setStep('⑧ 구매자 — 거래 정보 확인');
-  startDemoTimer();
   showToast('📱 구매자가 링크를 열었습니다');
+  startDemoTimer();
+
+  // 11. 구매자가 화면 보는 시간
+  await wait(4000);
+
+  // 12. 구매자 주소 확인 모달
+  document.getElementById('modalAddr').querySelector('.btn-success').onclick = null;
+  showModal('modalAddr');
+  await wait(3000);
+  closeModal('modalAddr');
+
+  // 13. 서명 1/2 — USDT Approve
+  await wait(500);
+  document.getElementById('signTitle').textContent = 'USDT 사용 허락';
+  document.getElementById('signStep').textContent = '1 / 2 단계';
+  document.getElementById('signProgress').style.width = '50%';
+  document.getElementById('signBody').innerHTML =
+    '<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>' +
+    '<div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 USDT를 가져갈 수 있도록 허락하는 단계입니다 <strong>(아직 USDT가 빠져나가지 않습니다)</strong></div></div>' +
+    '<div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>';
+  showModal('modalSign');
+  await wait(4000);
+  closeModal('modalSign');
+
+  // 14. USDT Approve 처리 중
+  document.getElementById('processingText').textContent = 'USDT 승인 처리 중...';
+  showModal('modalProcessing');
+  await wait(2500);
+  closeModal('modalProcessing');
+
+  // 15. 서명 2/2 — USDT 전송
+  await wait(500);
+  document.getElementById('signTitle').textContent = 'USDT 전송 및 MPC 수령';
+  document.getElementById('signStep').textContent = '2 / 2 단계';
+  document.getElementById('signProgress').style.width = '100%';
+  document.getElementById('signBody').innerHTML =
+    '<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>USDT 전송</strong> 요청이 표시됩니다</div></div>' +
+    '<div class="guide-step"><div class="guide-num">2</div><div class="guide-text">USDT가 에스크로로 전송되고 <strong>MPC가 즉시 내 지갑으로 들어옵니다</strong></div></div>' +
+    '<div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>';
+  showModal('modalSign');
+  await wait(4000);
+  closeModal('modalSign');
+
+  // 16. 거래 완료 처리 중
+  document.getElementById('processingText').textContent = '거래 완료 처리 중...';
+  showModal('modalProcessing');
+  await wait(2500);
+  closeModal('modalProcessing');
+
+  // 17. 완료 화면
+  clearInterval(timerInterval);
+  document.getElementById('buyActionArea').style.display = 'none';
+  document.getElementById('buyCompleteArea').style.display = 'block';
+  showToast('🎉 거래가 완료됐습니다!', 4000);
 }
 
 function startDemoTimer() {
@@ -461,71 +483,6 @@ function startDemoTimer() {
     document.getElementById('demoTimerFill').style.width = (demoSeconds / 600 * 100) + '%';
     if (demoSeconds <= 0) clearInterval(timerInterval);
   }, 1000);
-}
-
-// ── 4단계: 구매자 USDT 예치 ──
-function demoBuyDeposit() {
-  setStep('⑨ 지갑 주소 확인');
-  showModal('modalAddr');
-  document.getElementById('modalAddr').querySelector('.btn-success').onclick = demoAfterBuyAddr;
-}
-
-function demoAfterBuyAddr() {
-  closeModal('modalAddr');
-  setStep('⑩ 서명 1/2 — USDT 사용 허락');
-  setTimeout(function() { demoBuySign1(); }, 300);
-}
-
-function demoBuySign1() {
-  document.getElementById('signTitle').textContent = 'USDT 사용 허락';
-  document.getElementById('signStep').textContent = '1 / 2 단계';
-  document.getElementById('signProgress').style.width = '50%';
-  document.getElementById('signBody').innerHTML =
-    '<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>' +
-    '<div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 USDT를 가져갈 수 있도록 허락하는 단계입니다 <strong>(아직 USDT가 빠져나가지 않습니다)</strong></div></div>' +
-    '<div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>';
-  document.getElementById('signNextBtn').onclick = demoAfterBuySign1;
-  showModal('modalSign');
-}
-
-function demoAfterBuySign1() {
-  closeModal('modalSign');
-  setStep('⑩ USDT Approve 처리 중...');
-  document.getElementById('processingText').textContent = 'USDT 승인 처리 중...';
-  showModal('modalProcessing');
-  setTimeout(function() {
-    closeModal('modalProcessing');
-    setStep('⑪ 서명 2/2 — USDT 전송');
-    demoBuySign2();
-  }, 2000);
-}
-
-function demoBuySign2() {
-  document.getElementById('signTitle').textContent = 'USDT 전송 및 MPC 수령';
-  document.getElementById('signStep').textContent = '2 / 2 단계';
-  document.getElementById('signProgress').style.width = '100%';
-  document.getElementById('signBody').innerHTML =
-    '<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>USDT 전송</strong> 요청이 표시됩니다</div></div>' +
-    '<div class="guide-step"><div class="guide-num">2</div><div class="guide-text">USDT가 에스크로로 전송되고 <strong>MPC가 즉시 내 지갑으로 들어옵니다</strong></div></div>' +
-    '<div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>';
-  document.getElementById('signNextBtn').onclick = demoAfterBuySign2;
-  showModal('modalSign');
-}
-
-function demoAfterBuySign2() {
-  closeModal('modalSign');
-  setStep('⑫ 거래 완료 처리 중...');
-  document.getElementById('processingText').textContent = '거래 완료 처리 중...';
-  showModal('modalProcessing');
-  setTimeout(function() {
-    closeModal('modalProcessing');
-    clearInterval(timerInterval);
-    document.getElementById('buyActionArea').style.display = 'none';
-    document.getElementById('buyCompleteArea').style.display = 'block';
-    setStep('✅ 거래 완료!');
-    showToast('🎉 거래가 완료됐습니다!', 4000);
-    setTimeout(function() { setStep(''); }, 4000);
-  }, 2000);
 }
 </script>
 </body>
