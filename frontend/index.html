@@ -292,7 +292,7 @@ a { color:var(--gold); text-decoration:none; }
           <input type="number" id="sellMpcAmount" placeholder="0" min="1" max="100000" oninput="calcSell()">
           <span class="input-unit">MPC</span>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">최대 100,000 MPC</div>
+        <div id="hintMpcAmt" style="font-size:11px;color:var(--text3);margin-top:4px">최소 100 ~ 최대 100,000 MPC</div>
       </div>
 
       <div class="input-group">
@@ -301,7 +301,7 @@ a { color:var(--gold); text-decoration:none; }
           <input type="number" id="sellPricePerMpc" placeholder="0" step="10" min="10" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 10, 20, 30...)</div>
+        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 10, 20, 30...)</div>
       </div>
 
       <div class="input-group">
@@ -310,6 +310,7 @@ a { color:var(--gold); text-decoration:none; }
           <input type="number" id="sellKrwPerUsdt" placeholder="" step="10" min="10" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
+        <div id="hintKrw" style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 1460, 1470...)</div>
       </div>
 
       <!-- 계산 결과 -->
@@ -597,6 +598,7 @@ const ESCROW_ABI = [
   'function getUserTrades(address user) view returns (bytes32[])',
   'function isTradeExpired(bytes32 tradeId) view returns (bool)',
   'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
+  'event TradeCommitted(bytes32 indexed tradeId, address indexed seller, bytes32 commitHash)',
   'event TradeCompleted(bytes32 indexed tradeId, address indexed seller, address indexed buyer)',
   'event TradeCancelled(bytes32 indexed tradeId, address indexed initiator)',
   'event TradeExpired(bytes32 indexed tradeId)',
@@ -788,22 +790,7 @@ async function ensurePolygonNetwork() {
 }
 
 function initContractsEthers() {
-  const ERC20_ABI = [
-    'function approve(address spender, uint256 amount) returns (bool)',
-    'function balanceOf(address owner) view returns (uint256)',
-  ];
-  const ESCROW_ABI = [
-    'function commitTrade(bytes32 commitHash) returns (bytes32)',
-    'function revealAndDeposit(bytes32 tradeId, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 krwPerUsdt, bytes32 secret)',
-    'function buyerDeposit(bytes32 tradeId)',
-    'function confirmTrade(bytes32 tradeId)',
-    'function cancelTrade(bytes32 tradeId)',
-    'function expireTrade(bytes32 tradeId)',
-    'function getTrade(bytes32 tradeId) view returns (address seller, address buyer, uint256 mpcAmount, uint256 usdtPricePerMPC, uint256 usdtAmount, uint256 krwPerUsdt, uint256 createdAt, uint256 sellerDepositBlock, uint8 status, bool sellerDeposited, bool buyerDeposited, bytes32 commitHash)',
-    'function getUserTrades(address user) view returns (bytes32[])',
-    'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
-    'event TradeCommitted(bytes32 indexed tradeId, address indexed seller, bytes32 commitHash)',
-  ];
+  // 전역 ESCROW_ABI / ERC20_ABI 사용 (중복 정의 금지 — 한 곳만 수정하면 되도록)
   escrowContract = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, window.__ethersSigner);
   mpcContract    = new ethers.Contract(CONFIG.MPC_TOKEN,    ERC20_ABI,  window.__ethersSigner);
   usdtContract   = new ethers.Contract(CONFIG.USDT_TOKEN,   ERC20_ABI,  window.__ethersSigner);
@@ -880,29 +867,41 @@ function calcSell() {
   const box = document.getElementById('sellCalcBox');
   const btn = document.getElementById('btnCreateTrade');
 
+  // 입력칸 아래 안내 문구 (토스트 대신 인라인 표시 → 입력 중 반복 알림 방지)
+  const setHint = (id, msg, warn) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = warn ? 'var(--danger)' : 'var(--text3)';
+  };
+  setHint('hintMpcAmt', '최소 100 ~ 최대 100,000 MPC', false);
+  setHint('hintPrice', '10원 단위로 입력 (예: 10, 20, 30...)', false);
+  setHint('hintKrw', '10원 단위로 입력 (예: 1460, 1470...)', false);
+
   if (mpcAmt <= 0 || pricePerMpc <= 0 || krwPerUsdt <= 0) {
     if (box) box.style.display = 'none';
     if (btn) btn.disabled = true;
     return;
   }
 
+  let invalid = false;
   if (mpcAmt < CONFIG.MIN_MPC) {
-    showToast(`최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다`);
-    if (btn) btn.disabled = true;
-    return;
-  }
-  if (mpcAmt > CONFIG.MAX_MPC) {
-    showToast('최대 거래 한도는 10만 MPC입니다');
-    if (btn) btn.disabled = true;
-    return;
+    setHint('hintMpcAmt', `⚠️ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다`, true);
+    invalid = true;
+  } else if (mpcAmt > CONFIG.MAX_MPC) {
+    setHint('hintMpcAmt', `⚠️ 최대 거래 한도는 ${CONFIG.MAX_MPC.toLocaleString()} MPC입니다`, true);
+    invalid = true;
   }
   if (pricePerMpc % 10 !== 0) {
-    showToast('MPC 단가는 10원 단위로 입력해주세요 (예: 10, 20, 30...)');
-    if (btn) btn.disabled = true;
-    return;
+    setHint('hintPrice', '⚠️ 10원 단위로 입력해주세요 (예: 10, 20, 30...)', true);
+    invalid = true;
   }
   if (krwPerUsdt % 10 !== 0) {
-    showToast('USDT 환율은 10원 단위로 입력해주세요 (예: 1460, 1470...)');
+    setHint('hintKrw', '⚠️ 10원 단위로 입력해주세요 (예: 1460, 1470...)', true);
+    invalid = true;
+  }
+  if (invalid) {
+    if (box) box.style.display = 'none';
     if (btn) btn.disabled = true;
     return;
   }
