@@ -1575,7 +1575,7 @@ async function getRemainingTime(tradeId) {
 async function checkPolBalance() {
   if (!window.__ethersProvider || !walletAddress) return true;
   const bal = await window.__ethersProvider.getBalance(walletAddress);
-  return bal.gt(ethers.utils.parseEther('0.005'));
+  return bal.gt(ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString()));
 }
 
 // ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
