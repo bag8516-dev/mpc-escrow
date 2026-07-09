@@ -1447,7 +1447,8 @@ async function loadMarket() {
       const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
       const sellerShort = `<span style="color:var(--gold)">${it.seller.slice(0,6)}</span>...${it.seller.slice(-4)}`;
       const buyBtn = isMine
-        ? '<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px">내가 올린 거래입니다</div>'
+        ? `<div style="text-align:center;font-size:12px;color:var(--gold);margin-top:8px">내가 올린 거래입니다</div>
+           <button class="btn btn-sm btn-outline" style="margin-top:6px;width:100%" onclick="showTab('status')">⚙️ 관리하기 (가격 수정 · 취소 · 링크 복사)</button>`
         : `<button class="btn btn-sm btn-success" style="margin-top:10px;width:100%" onclick="buyFromMarket('${it.tradeId}')">🛒 구매하기</button>`;
       return `<div class="trade-item">
         <div class="trade-item-header">
