@@ -299,10 +299,10 @@ a { color:var(--gold); text-decoration:none; }
       <div class="input-group">
         <label class="input-label">MPC 1개당 원화 가격</label>
         <div class="input-wrap">
-          <input type="number" id="sellPricePerMpc" placeholder="0" step="10" min="10" oninput="calcSell()">
+          <input type="number" id="sellPricePerMpc" placeholder="0" step="50" min="100" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
-        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 10, 20, 30...)</div>
+        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">최소 100원, 50원 단위 (예: 100, 150, 200...)</div>
       </div>
 
       <div class="input-group">
@@ -931,7 +931,7 @@ function calcSell() {
     el.style.color = warn ? 'var(--danger)' : 'var(--text3)';
   };
   setHint('hintMpcAmt', '최소 100 ~ 최대 100,000 MPC', false);
-  setHint('hintPrice', '10원 단위로 입력 (예: 10, 20, 30...)', false);
+  setHint('hintPrice', '최소 100원, 50원 단위 (예: 100, 150, 200...)', false);
   setHint('hintKrw', '10원 단위로 입력 (예: 1460, 1470...)', false);
 
   if (mpcAmt <= 0 || pricePerMpc <= 0 || krwPerUsdt <= 0) {
@@ -948,8 +948,11 @@ function calcSell() {
     setHint('hintMpcAmt', `⚠️ 최대 거래 한도는 ${CONFIG.MAX_MPC.toLocaleString()} MPC입니다`, true);
     invalid = true;
   }
-  if (pricePerMpc % 10 !== 0) {
-    setHint('hintPrice', '⚠️ 10원 단위로 입력해주세요 (예: 10, 20, 30...)', true);
+  if (pricePerMpc < 100) {
+    setHint('hintPrice', '⚠️ MPC 1개당 최소 가격은 100원입니다', true);
+    invalid = true;
+  } else if (pricePerMpc % 50 !== 0) {
+    setHint('hintPrice', '⚠️ 50원 단위로 입력해주세요 (예: 100, 150, 200...)', true);
     invalid = true;
   }
   if (krwPerUsdt % 10 !== 0) {
@@ -1005,7 +1008,8 @@ async function createTradeFlow() {
   if (mpcAmt < CONFIG.MIN_MPC) { showError(`❌ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다.`); return; }
   if (pricePerMpc <= 0)  { showError('MPC 단가는 0보다 커야 합니다.'); return; }
   if (krwPerUsdt <= 0)   { showError('USDT 환율은 0보다 커야 합니다.'); return; }
-  if (pricePerMpc % 10 !== 0) { showError('❌ MPC 단가는 10원 단위로 입력해주세요.<br>예: 10, 20, 30...'); return; }
+  if (pricePerMpc < 100) { showError('❌ MPC 1개당 최소 가격은 100원입니다.'); return; }
+  if (pricePerMpc % 50 !== 0) { showError('❌ MPC 단가는 50원 단위로 입력해주세요.<br>예: 100, 150, 200...'); return; }
   if (krwPerUsdt % 10 !== 0)  { showError('❌ USDT 환율은 10원 단위로 입력해주세요.<br>예: 1460, 1470...'); return; }
   if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
 
@@ -1699,7 +1703,7 @@ async function editPriceById(tradeId) {
     // 판매 화면으로 이동하며 기존 값 미리 채우기
     if (t) {
       document.getElementById('sellMpcAmount').value = t.mpcAmt || '';
-      if (t.pricePerMpc) document.getElementById('sellPricePerMpc').value = Math.round(t.pricePerMpc / 10) * 10;
+      if (t.pricePerMpc) document.getElementById('sellPricePerMpc').value = Math.max(100, Math.round(t.pricePerMpc / 50) * 50);
       if (t.krwPerUsdt)  document.getElementById('sellKrwPerUsdt').value = t.krwPerUsdt;
     }
     showTab('sell');
