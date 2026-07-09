@@ -575,13 +575,14 @@ const CONFIG = {
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
   CHAIN_ID:      137,
   CHAIN_NAME:    'Polygon',
-  RPC_URL:       'https://polygon-rpc.com',
+  RPC_URL:       'https://polygon-bor-rpc.publicnode.com',
+  // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
   RPC_FALLBACKS: [
-    'https://polygon-rpc.com',
+    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능 (장터 필수)
+    'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
+    'https://polygon.drpc.org',
+    'https://1rpc.io/matic',
     'https://polygon-pokt.nodies.app',
-    'https://polygon.llamarpc.com',
-    'https://rpc.ankr.com/polygon',
-    'https://rpc-mainnet.matic.quiknode.pro',
   ],
   EXPLORER:      'https://polygonscan.com',
   NATIVE_TOKEN:  'POL',
@@ -1400,18 +1401,18 @@ async function loadMarket() {
     const c = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP);
 
     // 거래는 생성 후 24시간 유효 → 최근 24시간치 블록 조회 (폴리곤 ~2초/블록 ≈ 43,200블록 + 여유분)
-    // RPC마다 한 번에 조회 가능한 블록 범위 제한이 있어 3,000블록씩 나눠서 조회
-    const latest = await readP.getBlockNumber();
-    const LOOKBACK = 46000, CHUNK = 3000;
-    const startBlock = Math.max(0, latest - LOOKBACK);
-    const events = [];
-    for (let from = startBlock; from <= latest; from += CHUNK) {
-      const to = Math.min(from + CHUNK - 1, latest);
+    // 무료 RPC 다수가 이벤트 대량 조회를 제한하므로, 되는 RPC를 순서대로 시도해 한 번에 조회
+    let events = null;
+    for (const url of CONFIG.RPC_FALLBACKS) {
       try {
-        const chunk = await c.queryFilter(c.filters.TradeRevealed(), from, to);
-        events.push(...chunk);
-      } catch { /* 일부 구간 조회 실패는 건너뜀 */ }
+        const lp = new ethers.providers.JsonRpcProvider(url);
+        const lc = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, lp);
+        const latest = await lp.getBlockNumber();
+        events = await lc.queryFilter(lc.filters.TradeRevealed(), Math.max(0, latest - 46000), latest);
+        break; // 성공
+      } catch { /* 다음 RPC 시도 */ }
     }
+    if (events === null) throw new Error('이벤트 조회 실패');
 
     const nowSec = Math.floor(Date.now() / 1000);
     const items = [];
