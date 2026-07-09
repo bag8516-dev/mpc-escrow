@@ -347,7 +347,7 @@ a { color:var(--gold); text-decoration:none; }
       </div>
       <div class="rate-box" style="margin-top:12px">
         <div class="rate-row"><span class="rate-label">판매자 설정 환율</span><span class="rate-value" id="buySellerRate">—</span></div>
-        <div class="rate-row"><span class="rate-label">실시간 환율 (CoinGecko)</span><span class="rate-value rate-live" id="buyLiveRate">—</span></div>
+        <div class="rate-row"><span class="rate-label">실시간 환율 (거래소 시세)</span><span class="rate-value rate-live" id="buyLiveRate">—</span></div>
       </div>
       <div class="warn-box">⚠️ 판매자 설정 환율과 실시간 환율이 다를 수 있습니다. 거래 전 반드시 확인하세요.</div>
     </div>
@@ -889,24 +889,43 @@ function showTab(tab) {
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-// ── CoinGecko 환율 ────────────────────────────────────────────────────────
+// ── 실시간 USDT/KRW 환율 (업비트 → CoinGecko 순서로 시도) ─────────────────
+async function fetchRateUpbit() {
+  // 업비트 공개 시세 API — 한국 원화 시장이라 환율이 가장 정확
+  const res = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-USDT');
+  if (!res.ok) throw new Error('upbit');
+  const data = await res.json();
+  const price = data?.[0]?.trade_price;
+  if (!price || price <= 0) throw new Error('upbit');
+  return price;
+}
+
+async function fetchRateCoinGecko() {
+  const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw');
+  if (!res.ok) throw new Error('coingecko');
+  const data = await res.json();
+  const price = data.tether?.krw;
+  if (!price || price <= 0) throw new Error('coingecko');
+  return price;
+}
+
 async function fetchLiveRate() {
   const el = document.getElementById('liveRate');
   const upd = document.getElementById('rateUpdating');
-  try {
-    if (upd) upd.innerHTML = '<span class="spinner-sm"></span>업데이트 중';
-    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw');
-    if (!res.ok) throw new Error('API 오류');
-    const data = await res.json();
-    liveKrwRate = data.tether?.krw || null;
-    if (el) el.textContent = liveKrwRate ? `${liveKrwRate.toLocaleString()}원` : '환율 정보 없음';
-    if (upd) upd.innerHTML = '5분마다 업데이트';
-    calcSell();
-    updateBuyLiveRate();
-  } catch {
-    if (el) el.textContent = '환율 정보를 불러올 수 없습니다';
-    if (upd) upd.innerHTML = '업데이트 실패';
+  if (upd) upd.innerHTML = '<span class="spinner-sm"></span>업데이트 중';
+  // 업비트 먼저, 실패하면 CoinGecko — 둘 중 하나만 살아있어도 환율 표시됨
+  for (const fetcher of [fetchRateUpbit, fetchRateCoinGecko]) {
+    try {
+      liveKrwRate = await fetcher();
+      if (el) el.textContent = `${liveKrwRate.toLocaleString()}원`;
+      if (upd) upd.innerHTML = '5분마다 업데이트';
+      calcSell();
+      updateBuyLiveRate();
+      return;
+    } catch { /* 다음 소스 시도 */ }
   }
+  if (el) el.textContent = '환율 정보를 불러올 수 없습니다';
+  if (upd) upd.innerHTML = '업데이트 실패';
 }
 
 function updateBuyLiveRate() {
