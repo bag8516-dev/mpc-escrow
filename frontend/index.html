@@ -392,6 +392,18 @@ a { color:var(--gold); text-decoration:none; }
     </div>
   </div>
 
+  <!-- ─── 장터 (매도 목록) 페이지 ──────────────────────────── -->
+  <div id="pageMarket" class="page">
+    <div style="padding:16px 16px 0;display:flex;align-items:center;justify-content:space-between">
+      <div class="card-title" style="padding:0">🏪 판매 중인 거래</div>
+      <button class="btn btn-sm btn-ghost" onclick="loadMarket()" id="btnMarketRefresh">🔄 새로고침</button>
+    </div>
+    <div style="padding:8px 16px 0;font-size:12px;color:var(--text3)">거래는 생성 후 10분간만 유효합니다. 최신 목록은 새로고침으로 확인하세요.</div>
+    <div id="marketList">
+      <div style="text-align:center;padding:40px 20px;color:var(--text3)">불러오는 중...</div>
+    </div>
+  </div>
+
   <!-- ─── 거래 상태 페이지 ──────────────────────────────────── -->
   <div id="pageStatus" class="page">
     <div style="padding:16px 16px 0">
@@ -418,6 +430,9 @@ a { color:var(--gold); text-decoration:none; }
 <div class="tab-bar" id="tabBar" style="display:none">
   <div class="tab-item active" onclick="showTab('sell')" id="tab-sell">
     <span class="tab-icon">💰</span><span>판매</span>
+  </div>
+  <div class="tab-item" onclick="showTab('market')" id="tab-market">
+    <span class="tab-icon">🏪</span><span>장터</span>
   </div>
   <div class="tab-item" onclick="showTab('status')" id="tab-status">
     <span class="tab-icon">📊</span><span>진행 중</span>
@@ -599,6 +614,7 @@ const ESCROW_ABI = [
   'function isTradeExpired(bytes32 tradeId) view returns (bool)',
   'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
   'event TradeCommitted(bytes32 indexed tradeId, address indexed seller, bytes32 commitHash)',
+  'event TradeRevealed(bytes32 indexed tradeId, address indexed seller, uint256 mpcAmount, uint256 usdtAmount, uint256 krwPerUsdt)',
   'event TradeCompleted(bytes32 indexed tradeId, address indexed seller, address indexed buyer)',
   'event TradeCancelled(bytes32 indexed tradeId, address indexed initiator)',
   'event TradeExpired(bytes32 indexed tradeId)',
@@ -824,12 +840,16 @@ function onWalletConnected() {
 
 // ── 탭 전환 ───────────────────────────────────────────────────────────────
 function showTab(tab) {
-  ['sell','status','history'].forEach(t => {
+  ['sell','market','status','history'].forEach(t => {
     document.getElementById('page' + capitalize(t)).classList.remove('active');
     document.getElementById('tab-' + t).classList.remove('active');
   });
+  // 구매자 화면이 열려 있었다면 함께 닫기 (장터 → 구매 → 다른 탭 이동 시 중복 표시 방지)
+  document.getElementById('pageBuy').classList.remove('active');
+  document.getElementById('tab-buy')?.classList.remove('active');
   document.getElementById('page' + capitalize(tab)).classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'market') loadMarket();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -1071,7 +1091,7 @@ async function createTradeFlow() {
 // ── 구매자 화면 로드 ──────────────────────────────────────────────────────
 async function showBuyerPage(tradeId) {
   // 우선 모든 탭 숨기고 구매자 탭 표시
-  ['sell','status','history'].forEach(t => {
+  ['sell','market','status','history'].forEach(t => {
     document.getElementById('page' + capitalize(t)).classList.remove('active');
     document.getElementById('tab-' + t).classList.remove('active');
   });
@@ -1081,6 +1101,14 @@ async function showBuyerPage(tradeId) {
   if (!document.getElementById('tab-buy')) {
     document.getElementById('tabBar').innerHTML += `<div class="tab-item active" id="tab-buy"><span class="tab-icon">🛒</span><span>구매</span></div>`;
   }
+  document.getElementById('tab-buy').classList.add('active');
+
+  // 화면 상태 초기화 (이전 구매 완료/취소 화면이 남지 않도록)
+  document.getElementById('buyTimerBar').style.display = '';
+  document.getElementById('buyActionArea').style.display = '';
+  document.getElementById('buyWaitArea').style.display = 'none';
+  document.getElementById('buyCompleteArea').style.display = 'none';
+  document.getElementById('buyCancelledArea').style.display = 'none';
 
   try {
     const trade = await fetchTrade(tradeId);
@@ -1342,6 +1370,83 @@ async function recoverTradesFromChain() {
   } catch(e) {
     // 복구 실패해도 기존 기능에 영향 없음
   }
+}
+
+// ── 장터 (매도 목록) ──────────────────────────────────────────────────────
+async function loadMarket() {
+  const el = document.getElementById('marketList');
+  const btn = document.getElementById('btnMarketRefresh');
+  if (!el) return;
+  if (btn) btn.disabled = true;
+  el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)"><span class="spinner-sm"></span> 판매 목록을 불러오는 중...</div>';
+  try {
+    const readP = await getReadProvider();
+    if (!readP) throw new Error('network');
+    const c = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP);
+
+    // 거래는 생성 후 10분만 유효 → 최근 블록만 조회하면 충분 (폴리곤 ~2초/블록, 여유분 포함 900블록 ≈ 30분)
+    const latest = await readP.getBlockNumber();
+    const fromBlock = Math.max(0, latest - 900);
+    const events = await c.queryFilter(c.filters.TradeRevealed(), fromBlock, latest);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const items = [];
+    for (const ev of events.reverse()) { // 최신 거래부터
+      try {
+        const t = await c.getTrade(ev.args.tradeId);
+        if (Number(t.status) !== 2) continue; // PENDING(구매 가능)만 표시
+        const remain = Number(t.createdAt) + CONFIG.TRADE_TIMEOUT - nowSec;
+        if (remain <= 0) continue;
+        items.push({
+          tradeId: ev.args.tradeId,
+          seller:  t.seller,
+          mpcAmt:  parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18)),
+          usdt:    parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6)),
+          krw:     Number(t.krwPerUsdt),
+          remain,
+        });
+      } catch { /* 개별 거래 조회 실패는 건너뜀 */ }
+    }
+
+    if (items.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">현재 판매 중인 거래가 없습니다</div>';
+      return;
+    }
+
+    el.innerHTML = items.map(it => {
+      const totalKrw = Math.round(it.usdt * it.krw);
+      const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
+      const min = Math.floor(it.remain / 60), sec = it.remain % 60;
+      const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
+      const sellerShort = `<span style="color:var(--gold)">${it.seller.slice(0,6)}</span>...${it.seller.slice(-4)}`;
+      const buyBtn = isMine
+        ? '<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px">내가 올린 거래입니다</div>'
+        : `<button class="btn btn-sm btn-success" style="margin-top:10px;width:100%" onclick="buyFromMarket('${it.tradeId}')">🛒 구매하기</button>`;
+      return `<div class="trade-item">
+        <div class="trade-item-header">
+          <span class="badge badge-pending">판매 중</span>
+          <span style="font-size:12px;color:var(--text3)">⏱ ${min}분 ${sec}초 남음</span>
+        </div>
+        <div class="trade-item-amounts">
+          <span style="color:var(--mpc);font-weight:700">${it.mpcAmt.toLocaleString()} MPC</span>
+          <span style="color:var(--text3)">→</span>
+          <span style="color:var(--usdt);font-weight:700">${it.usdt.toFixed(1)} USDT</span>
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px">1 MPC ≈ ${unitKrw.toLocaleString()}원 · 총 ${totalKrw.toLocaleString()}원</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">판매자: ${sellerShort}</div>
+        ${buyBtn}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">목록을 불러오지 못했습니다.<br>잠시 후 새로고침을 눌러주세요.</div>';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function buyFromMarket(tradeId) {
+  currentTradeId = tradeId;
+  showBuyerPage(tradeId);
 }
 
 function renderStatusList(trades) {
