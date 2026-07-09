@@ -1517,6 +1517,7 @@ function tradeItemHtml(t) {
       buttons = `
         <div style="font-size:12px;color:var(--text3);margin-top:8px" data-countdown="${t.createdAt}">⏱ 만료까지 ${fmtRemain(remainSecs)}</div>
         <button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="copyTradeLink('${t.tradeId}')">🔗 구매자 링크 다시 복사</button>
+        <button class="btn btn-sm btn-outline" style="margin-top:6px" onclick="editPriceById('${t.tradeId}')">💰 가격 수정</button>
         <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
     }
   } else if (t.status === 'ACTIVE') {
@@ -1552,6 +1553,45 @@ function copyTradeLink(tradeId) {
   }).catch(() => {
     showError('링크 복사에 실패했습니다.<br>직접 복사하세요:<br><br><small style="word-break:break-all">' + deepLink + '</small>');
   });
+}
+
+// ── 가격 수정 (취소 후 재게시, 6시간에 1회 제한) ─────────────────────────
+const PRICE_EDIT_KEY = 'mpc_last_price_edit';
+const PRICE_EDIT_COOLDOWN = 6 * 3600 * 1000; // 6시간 (ms)
+
+async function editPriceById(tradeId) {
+  const last = Number(localStorage.getItem(PRICE_EDIT_KEY) || 0);
+  const elapsed = Date.now() - last;
+  if (elapsed < PRICE_EDIT_COOLDOWN) {
+    const remainSec = Math.ceil((PRICE_EDIT_COOLDOWN - elapsed) / 1000);
+    showError(`❌ 가격 수정은 <strong>6시간에 한 번</strong>만 가능합니다.<br><br>다음 수정 가능까지 <strong>${fmtRemain(remainSec)}</strong> 남았습니다.`);
+    return;
+  }
+
+  const ok = await showConfirm(
+    '💰 가격 수정',
+    `가격을 수정하면 기존 판매 글이 <strong>취소되고 MPC가 반환</strong>된 뒤,<br>새 가격으로 다시 게시하게 됩니다.<br><br>
+    ⚠️ 가격 수정은 <strong>6시간에 한 번</strong>만 가능합니다.<br><br>진행하시겠습니까?`
+  );
+  if (!ok) return;
+
+  try {
+    const t = getLocalTrades()[tradeId];
+    await callCancel(tradeId);
+    updateLocalTradeStatus(tradeId, 'CANCELLED');
+    localStorage.setItem(PRICE_EDIT_KEY, Date.now().toString());
+    showToast('✅ 기존 글이 취소됐습니다. 새 가격을 입력하고 다시 게시해주세요.', 5000);
+
+    // 판매 화면으로 이동하며 기존 값 미리 채우기
+    if (t) {
+      document.getElementById('sellMpcAmount').value = t.mpcAmt || '';
+      if (t.pricePerMpc) document.getElementById('sellPricePerMpc').value = Math.round(t.pricePerMpc / 10) * 10;
+      if (t.krwPerUsdt)  document.getElementById('sellKrwPerUsdt').value = t.krwPerUsdt;
+    }
+    showTab('sell');
+    calcSell();
+    loadUserTrades();
+  } catch(err) { showError(parseError(err)); }
 }
 
 async function cancelTradeById(tradeId) {
