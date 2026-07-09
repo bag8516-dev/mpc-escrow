@@ -586,11 +586,12 @@ const CONFIG = {
   RPC_URL:       'https://polygon-bor-rpc.publicnode.com',
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
   RPC_FALLBACKS: [
-    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능 (장터 필수)
+    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능 (장터 1순위)
+    'https://icy-green-pallet.matic.quiknode.pro/93742044e6bc41d9c0515376f1a8b0d8e8ef2efd/', // 전용 엔드포인트 (일반 조회 안정, 이벤트 조회는 불가)
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
     'https://1rpc.io/matic',
-    'https://polygon-pokt.nodies.app',
+    'https://polygon-pokt.nodies.app',          // 이벤트 250블록 제한 (비상용 청크 조회 가능)
   ],
   EXPLORER:      'https://polygonscan.com',
   NATIVE_TOKEN:  'POL',
@@ -1449,6 +1450,54 @@ async function recoverTradesFromChain() {
   }
 }
 
+// ── 장터 이벤트 조회 (3단계 자동 전환) ────────────────────────────────────
+// 무료 RPC마다 이벤트 조회 허용 범위가 달라서, 빠른 방법부터 순서대로 시도:
+// ① 전체(46,000블록) 한 번에 → ② 10,000블록씩 5번 → ③ 250블록씩 185번 (비상용, ~11초)
+async function fetchMarketEvents() {
+  const LOOKBACK = 46000;
+
+  // 전략별 조회 함수
+  const strategies = [
+    async (lc, latest) => { // ① 한 번에
+      const start = Math.max(0, latest - LOOKBACK);
+      return await lc.queryFilter(lc.filters.TradeRevealed(), start, latest);
+    },
+    async (lc, latest) => { // ② 10,000블록씩
+      const start = Math.max(0, latest - LOOKBACK);
+      const out = [];
+      for (let from = start; from <= latest; from += 10000) {
+        out.push(...await lc.queryFilter(lc.filters.TradeRevealed(), from, Math.min(from + 9999, latest)));
+      }
+      return out;
+    },
+    async (lc, latest) => { // ③ 250블록씩 8개 동시 (비상용)
+      const start = Math.max(0, latest - LOOKBACK);
+      const ranges = [];
+      for (let from = start; from <= latest; from += 250) ranges.push([from, Math.min(from + 249, latest)]);
+      const out = [];
+      for (let i = 0; i < ranges.length; i += 8) {
+        const results = await Promise.all(ranges.slice(i, i + 8).map(([f, t]) =>
+          lc.queryFilter(lc.filters.TradeRevealed(), f, t)
+        ));
+        results.forEach(a => out.push(...a));
+      }
+      return out;
+    },
+  ];
+
+  for (const strategy of strategies) {
+    for (const url of CONFIG.RPC_FALLBACKS) {
+      try {
+        const lp = new ethers.providers.JsonRpcProvider(url);
+        const lc = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, lp);
+        const latest = await lp.getBlockNumber();
+        return await strategy(lc, latest);
+      } catch { /* 다음 RPC/전략 시도 */ }
+    }
+  }
+  return null;
+}
+
 // ── 장터 (매도 목록) ──────────────────────────────────────────────────────
 async function loadMarket() {
   const el = document.getElementById('marketList');
@@ -1462,17 +1511,7 @@ async function loadMarket() {
     const c = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP);
 
     // 거래는 생성 후 24시간 유효 → 최근 24시간치 블록 조회 (폴리곤 ~2초/블록 ≈ 43,200블록 + 여유분)
-    // 무료 RPC 다수가 이벤트 대량 조회를 제한하므로, 되는 RPC를 순서대로 시도해 한 번에 조회
-    let events = null;
-    for (const url of CONFIG.RPC_FALLBACKS) {
-      try {
-        const lp = new ethers.providers.JsonRpcProvider(url);
-        const lc = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, lp);
-        const latest = await lp.getBlockNumber();
-        events = await lc.queryFilter(lc.filters.TradeRevealed(), Math.max(0, latest - 46000), latest);
-        break; // 성공
-      } catch { /* 다음 RPC 시도 */ }
-    }
+    const events = await fetchMarketEvents();
     if (events === null) throw new Error('이벤트 조회 실패');
 
     const nowSec = Math.floor(Date.now() / 1000);
