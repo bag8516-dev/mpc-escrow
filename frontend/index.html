@@ -398,7 +398,7 @@ a { color:var(--gold); text-decoration:none; }
       <div class="card-title" style="padding:0">🏪 판매 중인 거래</div>
       <button class="btn btn-sm btn-ghost" onclick="loadMarket()" id="btnMarketRefresh">🔄 새로고침</button>
     </div>
-    <div style="padding:8px 16px 0;font-size:12px;color:var(--text3)">거래는 생성 후 10분간만 유효합니다. 최신 목록은 새로고침으로 확인하세요.</div>
+    <div style="padding:8px 16px 0;font-size:12px;color:var(--text3)">판매 글은 게시 후 24시간 동안 유효합니다. 최신 목록은 새로고침으로 확인하세요.</div>
     <div id="marketList">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">불러오는 중...</div>
     </div>
@@ -486,7 +486,7 @@ a { color:var(--gold); text-decoration:none; }
       <button class="copy-btn" id="copyUrlBtn" onclick="copyShareUrl()">복사</button>
     </div>
     <div class="info-box" style="margin-top:10px;font-size:12px">📱 카카오톡에서 링크 클릭 → Trust Wallet 앱 자동 실행</div>
-    <div class="warn-box" style="margin-top:8px">⏱ 10분 내에 구매자가 응답하지 않으면 자동으로 취소됩니다</div>
+    <div class="warn-box" style="margin-top:8px">⏱ 24시간 내에 구매자가 없으면 만료 처리 후 MPC가 반환됩니다. 판매자는 언제든 취소할 수 있습니다.</div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalShareLink')">확인</button>
   </div>
 </div>
@@ -553,7 +553,7 @@ a { color:var(--gold); text-decoration:none; }
 <div id="pageExpired" style="display:none;text-align:center;padding:80px 20px;flex-direction:column;align-items:center;gap:16px;position:fixed;inset:0;background:var(--navy);z-index:300;justify-content:center">
   <div style="font-size:60px">⌛</div>
   <div style="font-size:20px;font-weight:800">거래가 만료됐습니다</div>
-  <div style="color:var(--text2);font-size:15px;line-height:1.7">판매자에게 새 링크를 요청해주세요.<br>거래는 생성 후 10분간만 유효합니다.</div>
+  <div style="color:var(--text2);font-size:15px;line-height:1.7">판매자에게 새 링크를 요청해주세요.<br>거래는 생성 후 24시간 동안만 유효합니다.</div>
   <button class="btn btn-outline btn-sm" onclick="location.reload()" style="margin-top:8px">🔄 다시 시도</button>
 </div>
 
@@ -597,7 +597,7 @@ const CONFIG = {
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MIN_MPC:       100,
   MAX_MPC:       100000,
-  TRADE_TIMEOUT: 600,    // 10분 (초)
+  TRADE_TIMEOUT: 86400,  // 24시간 (초) — 컨트랙트 TRADE_TIMEOUT과 반드시 일치해야 함
   RATE_INTERVAL: 300000, // 5분 (ms)
 };
 
@@ -996,6 +996,16 @@ async function createTradeFlow() {
   );
   if (!confirmed) return;
 
+  // 1-1. 24시간 게시 + 가격 변동 위험 동의
+  const riskOk = await showConfirm(
+    '⚠️ 판매 게시 전 확인',
+    `판매 글은 <strong>24시간 동안 게시</strong>되며, 그동안 설정하신 가격이 고정됩니다.<br><br>
+    이 기간 중 <strong>MPC 시세나 환율이 변동되면 손해를 볼 수 있습니다.</strong><br><br>
+    판매자는 언제든 <strong>거래 취소</strong>로 MPC를 즉시 돌려받을 수 있습니다.<br><br>
+    위 내용을 이해했으며 진행하시겠습니까?`
+  );
+  if (!riskOk) return;
+
   // 2. POL 잔액 확인
   const hasGas = await checkPolBalance();
   if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
@@ -1264,18 +1274,23 @@ async function cancelTradeFlow() {
 }
 
 // ── 타이머 ─────────────────────────────────────────────────────────────────
+// 남은 시간(초) → "23시간 12분" / "12분 34초" / "45초"
+function fmtRemain(sec) {
+  if (sec >= 3600) return `${Math.floor(sec/3600)}시간 ${Math.floor((sec%3600)/60)}분`;
+  if (sec >= 60)   return `${Math.floor(sec/60)}분 ${sec%60}초`;
+  return `${sec}초`;
+}
+
 function startTimer(seconds) {
   clearInterval(timerInterval);
   let remaining = seconds;
   const total = CONFIG.TRADE_TIMEOUT;
 
   function update() {
-    const min = Math.floor(remaining / 60).toString().padStart(2,'0');
-    const sec = (remaining % 60).toString().padStart(2,'0');
     const countEl = document.getElementById('timerCount');
     const fillEl  = document.getElementById('timerFill');
     if (countEl) {
-      countEl.textContent = `${min}:${sec}`;
+      countEl.textContent = fmtRemain(Math.max(0, remaining));
       countEl.className = 'timer-count' + (remaining <= 60 ? ' urgent' : '');
     }
     if (fillEl) {
@@ -1384,10 +1399,19 @@ async function loadMarket() {
     if (!readP) throw new Error('network');
     const c = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP);
 
-    // 거래는 생성 후 10분만 유효 → 최근 블록만 조회하면 충분 (폴리곤 ~2초/블록, 여유분 포함 900블록 ≈ 30분)
+    // 거래는 생성 후 24시간 유효 → 최근 24시간치 블록 조회 (폴리곤 ~2초/블록 ≈ 43,200블록 + 여유분)
+    // RPC마다 한 번에 조회 가능한 블록 범위 제한이 있어 3,000블록씩 나눠서 조회
     const latest = await readP.getBlockNumber();
-    const fromBlock = Math.max(0, latest - 900);
-    const events = await c.queryFilter(c.filters.TradeRevealed(), fromBlock, latest);
+    const LOOKBACK = 46000, CHUNK = 3000;
+    const startBlock = Math.max(0, latest - LOOKBACK);
+    const events = [];
+    for (let from = startBlock; from <= latest; from += CHUNK) {
+      const to = Math.min(from + CHUNK - 1, latest);
+      try {
+        const chunk = await c.queryFilter(c.filters.TradeRevealed(), from, to);
+        events.push(...chunk);
+      } catch { /* 일부 구간 조회 실패는 건너뜀 */ }
+    }
 
     const nowSec = Math.floor(Date.now() / 1000);
     const items = [];
@@ -1416,7 +1440,6 @@ async function loadMarket() {
     el.innerHTML = items.map(it => {
       const totalKrw = Math.round(it.usdt * it.krw);
       const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
-      const min = Math.floor(it.remain / 60), sec = it.remain % 60;
       const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
       const sellerShort = `<span style="color:var(--gold)">${it.seller.slice(0,6)}</span>...${it.seller.slice(-4)}`;
       const buyBtn = isMine
@@ -1425,7 +1448,7 @@ async function loadMarket() {
       return `<div class="trade-item">
         <div class="trade-item-header">
           <span class="badge badge-pending">판매 중</span>
-          <span style="font-size:12px;color:var(--text3)">⏱ ${min}분 ${sec}초 남음</span>
+          <span style="font-size:12px;color:var(--text3)">⏱ ${fmtRemain(it.remain)} 남음</span>
         </div>
         <div class="trade-item-amounts">
           <span style="color:var(--mpc);font-weight:700">${it.mpcAmt.toLocaleString()} MPC</span>
@@ -1481,12 +1504,10 @@ function tradeItemHtml(t) {
   const partnerShort = partner !== '—' ? `<span style="color:var(--primary)">${partner.slice(0,6)}</span>...${partner.slice(-4)}` : '—';
   const scanLink = `${CONFIG.EXPLORER}/address/${CONFIG.ESCROW_PROXY}`;
 
-  // 만료 여부 계산 (PENDING 상태에서 10분 경과)
+  // 만료 여부 계산 (PENDING 상태에서 24시간 경과)
   const now = Date.now();
   const isExpiredTime = t.status === 'PENDING' && t.createdAt && (now - t.createdAt) > CONFIG.TRADE_TIMEOUT * 1000;
-  const remainMs = t.createdAt ? Math.max(0, (t.createdAt + CONFIG.TRADE_TIMEOUT * 1000) - now) : 0;
-  const remainMin = Math.floor(remainMs / 60000);
-  const remainSec = Math.floor((remainMs % 60000) / 1000);
+  const remainSecs = t.createdAt ? Math.max(0, Math.floor(((t.createdAt + CONFIG.TRADE_TIMEOUT * 1000) - now) / 1000)) : 0;
 
   let buttons = '';
   if (t.status === 'PENDING') {
@@ -1494,7 +1515,7 @@ function tradeItemHtml(t) {
       buttons = `<button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="expireTradeById('${t.tradeId}')">⏰ 만료 처리 및 MPC 반환</button>`;
     } else {
       buttons = `
-        <div style="font-size:12px;color:var(--text3);margin-top:8px" data-countdown="${t.createdAt}">⏱ 만료까지 ${remainMin}분 ${remainSec}초</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px" data-countdown="${t.createdAt}">⏱ 만료까지 ${fmtRemain(remainSecs)}</div>
         <button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="copyTradeLink('${t.tradeId}')">🔗 구매자 링크 다시 복사</button>
         <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
     }
@@ -1546,7 +1567,7 @@ async function cancelTradeById(tradeId) {
 
 
 async function expireTradeById(tradeId) {
-  const ok = await showConfirm('만료 처리', '10분이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
+  const ok = await showConfirm('만료 처리', '판매 시간(24시간)이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
   if (!ok) return;
   try {
     await callExpire(tradeId);
@@ -1597,9 +1618,7 @@ function startStatusCountdown() {
         el.textContent = '⏰ 만료됨 - 만료 처리 버튼을 눌러주세요';
         el.style.color = 'var(--danger)';
       } else {
-        const min = Math.floor(remainMs / 60000);
-        const sec = Math.floor((remainMs % 60000) / 1000);
-        el.textContent = `⏱ 만료까지 ${min}분 ${sec}초`;
+        el.textContent = `⏱ 만료까지 ${fmtRemain(Math.floor(remainMs / 1000))}`;
       }
     });
   }, 1000);
@@ -1850,7 +1869,7 @@ function parseError(err) {
     'timeout':                 '❌ 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.',
     'fetch':                   '❌ 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.',
     // ── 컨트랙트 revert (영어 원문 그대로 매핑) ──
-    'Trade expired':           '❌ 거래 시간이 만료됐습니다 (10분 초과).\n판매자에게 새 링크를 요청하세요.',
+    'Trade expired':           '❌ 거래 시간이 만료됐습니다 (24시간 초과).\n판매자에게 새 링크를 요청하세요.',
     'Trade not pending':       '❌ 이미 처리된 거래입니다.',
     'Trade not active':        '❌ 거래가 활성 상태가 아닙니다.',
     'Trade not found':         '❌ 거래를 찾을 수 없습니다. 링크를 다시 확인하세요.',
@@ -1858,7 +1877,7 @@ function parseError(err) {
     'Buyer already set':       '❌ 이미 다른 구매자가 참여한 거래입니다. 판매자에게 문의하세요.',
     'Too early':               '❌ 아직 거래 참여가 불가합니다. 잠시 후 다시 시도해주세요.',
     'Only PENDING can expire': '❌ 진행 중(PENDING) 상태인 거래만 만료 처리할 수 있습니다.',
-    'Not expired yet':         '❌ 아직 10분이 지나지 않았습니다. 잠시 후 만료 처리해주세요.',
+    'Not expired yet':         '❌ 아직 판매 시간(24시간)이 지나지 않았습니다. 만료 전에는 "거래 취소"로 MPC를 돌려받을 수 있습니다.',
     'Exceeds 100k MPC limit':  '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.',
     'MPC amount must be':      '❌ MPC 수량이 올바르지 않습니다.',
     'Price must be':           '❌ 거래 단가가 올바르지 않습니다. 가격을 다시 입력해주세요.',

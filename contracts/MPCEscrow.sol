@@ -83,8 +83,8 @@ contract MPCEscrow is Initializable, ReentrancyGuard {
 
     /// @dev 1회 최대 거래 한도: 100,000 MPC (18 decimals)
     uint256 public constant MAX_MPC_AMOUNT = 100_000 * 10**18;
-    /// @dev 거래 타임아웃: 10분
-    uint256 public constant TRADE_TIMEOUT = 10 minutes;
+    /// @dev 거래 타임아웃: 24시간 (장터 게시 지원 — 판매자는 언제든 취소 가능)
+    uint256 public constant TRADE_TIMEOUT = 24 hours;
     /// @dev 타임스탬프 조작 방어: 구매자는 판매자 예치 블록 이후에만 참여 가능
     uint256 public constant MIN_BLOCK_DELAY = 1;
 
