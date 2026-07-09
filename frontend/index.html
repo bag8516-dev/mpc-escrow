@@ -264,6 +264,7 @@ a { color:var(--gold); text-decoration:none; }
       <button class="btn btn-primary" id="btnConnect" onclick="connectWallet()" style="max-width:320px;width:100%">
         🔗 지갑 연결하기
       </button>
+      <button class="btn btn-outline" onclick="browseMarket()" style="max-width:320px;width:100%">🏪 장터 구경하기 (연결 없이)</button>
       <div style="font-size:12px;color:var(--text3);margin-top:6px">보안을 위해 모바일 Trust Wallet 전용으로 운영됩니다.<br>PC에서는 사용하실 수 없습니다.</div>
     </div>
   </div>
@@ -401,6 +402,10 @@ a { color:var(--gold); text-decoration:none; }
     <div style="padding:8px 16px 0;font-size:12px;color:var(--text3)">판매 글은 게시 후 24시간 동안 유효합니다. 최신 목록은 새로고침으로 확인하세요.</div>
     <div style="padding:12px 16px 0">
       <button class="btn btn-primary" onclick="showTab('sell')">➕ 내 MPC 판매 글 올리기</button>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px">
+      <button class="btn btn-sm btn-ghost" id="mktSortNew" onclick="setMarketSort('new')" style="flex:1;border:1px solid var(--gold)">🕐 최신순</button>
+      <button class="btn btn-sm btn-ghost" id="mktSortPrice" onclick="setMarketSort('price')" style="flex:1;border:1px solid var(--border)">💰 낮은 가격순</button>
     </div>
     <div id="marketList">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">불러오는 중...</div>
@@ -842,6 +847,33 @@ function onWalletConnected() {
   // 계정/네트워크 변경 감지 (window.ethereum 이벤트로 처리됨)
 }
 
+// ── 연결 없이 장터 구경 ──────────────────────────────────────────────────
+function browseMarket() {
+  document.getElementById('pageConnect').classList.remove('active');
+  document.getElementById('tabBar').style.display = 'flex';
+  showTab('market');
+}
+
+// 지갑 연결이 필요한 동작 앞에서 확인 (구경 모드 가드)
+function requireWallet() {
+  if (walletAddress) return true;
+  showError('🔗 지갑 연결이 필요합니다.<br><br>확인을 누르면 연결 화면으로 이동합니다.');
+  const modal = document.getElementById('modalError');
+  const btn = modal.querySelector('.btn');
+  const handler = () => {
+    btn.removeEventListener('click', handler);
+    ['sell','market','status','history'].forEach(t => {
+      document.getElementById('page' + capitalize(t)).classList.remove('active');
+      document.getElementById('tab-' + t).classList.remove('active');
+    });
+    document.getElementById('pageBuy').classList.remove('active');
+    document.getElementById('tabBar').style.display = 'none';
+    document.getElementById('pageConnect').classList.add('active');
+  };
+  btn.addEventListener('click', handler);
+  return false;
+}
+
 // ── 탭 전환 ───────────────────────────────────────────────────────────────
 function showTab(tab) {
   ['sell','market','status','history'].forEach(t => {
@@ -963,6 +995,7 @@ function calcSell() {
 
 // ── 거래 생성 플로우 ──────────────────────────────────────────────────────
 async function createTradeFlow() {
+  if (!requireWallet()) return;
   const mpcAmt      = parseFloat(document.getElementById('sellMpcAmount').value);
   const pricePerMpc = parseFloat(document.getElementById('sellPricePerMpc').value);
   const krwPerUsdt  = parseFloat(document.getElementById('sellKrwPerUsdt').value);
@@ -1185,6 +1218,7 @@ function showExpiredPage() {
 
 // ── 구매자 예치 플로우 ────────────────────────────────────────────────────
 async function buyDepositFlow() {
+  if (!requireWallet()) return;
   if (!currentTradeId) { showError('거래 ID가 없습니다'); return; }
 
   const hasGas = await checkPolBalance();
@@ -1436,40 +1470,90 @@ async function loadMarket() {
       } catch { /* 개별 거래 조회 실패는 건너뜀 */ }
     }
 
-    if (items.length === 0) {
-      el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">현재 판매 중인 거래가 없습니다</div>';
-      return;
-    }
-
-    el.innerHTML = items.map(it => {
-      const totalKrw = Math.round(it.usdt * it.krw);
-      const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
-      const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
-      const sellerShort = `<span style="color:var(--gold)">${it.seller.slice(0,6)}</span>...${it.seller.slice(-4)}`;
-      const buyBtn = isMine
-        ? `<div style="text-align:center;font-size:12px;color:var(--gold);margin-top:8px">내가 올린 거래입니다</div>
-           <button class="btn btn-sm btn-outline" style="margin-top:6px;width:100%" onclick="showTab('status')">⚙️ 관리하기 (가격 수정 · 취소 · 링크 복사)</button>`
-        : `<button class="btn btn-sm btn-success" style="margin-top:10px;width:100%" onclick="buyFromMarket('${it.tradeId}')">🛒 구매하기</button>`;
-      return `<div class="trade-item">
-        <div class="trade-item-header">
-          <span class="badge badge-pending">판매 중</span>
-          <span style="font-size:12px;color:var(--text3)">⏱ ${fmtRemain(it.remain)} 남음</span>
-        </div>
-        <div class="trade-item-amounts">
-          <span style="color:var(--mpc);font-weight:700">${it.mpcAmt.toLocaleString()} MPC</span>
-          <span style="color:var(--text3)">→</span>
-          <span style="color:var(--usdt);font-weight:700">${it.usdt.toFixed(1)} USDT</span>
-        </div>
-        <div style="font-size:13px;color:var(--text2);margin-top:6px">1 MPC ≈ ${unitKrw.toLocaleString()}원 · 총 ${totalKrw.toLocaleString()}원</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">판매자: ${sellerShort}</div>
-        ${buyBtn}
-      </div>`;
-    }).join('');
+    _marketItems = items;
+    renderMarket();
   } catch (e) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">목록을 불러오지 못했습니다.<br>잠시 후 새로고침을 눌러주세요.</div>';
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+// ── 장터 정렬 + 렌더 ─────────────────────────────────────────────────────
+let _marketItems = [];
+let _marketSort = 'new'; // 'new' | 'price'
+let _marketCountdownInterval = null;
+
+function setMarketSort(mode) {
+  _marketSort = mode;
+  const on  = 'flex:1;border:1px solid var(--gold)';
+  const off = 'flex:1;border:1px solid var(--border)';
+  document.getElementById('mktSortNew').style.cssText = mode === 'new' ? on : off;
+  document.getElementById('mktSortPrice').style.cssText = mode === 'price' ? on : off;
+  renderMarket();
+}
+
+function renderMarket() {
+  const el = document.getElementById('marketList');
+  if (!el) return;
+
+  if (_marketItems.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">현재 판매 중인 거래가 없습니다</div>';
+    return;
+  }
+
+  const items = [..._marketItems];
+  if (_marketSort === 'price') {
+    // 1 MPC당 원화 가격 낮은 순
+    items.sort((a, b) => (a.usdt * a.krw / a.mpcAmt) - (b.usdt * b.krw / b.mpcAmt));
+  }
+  // 'new'는 로드 시 최신순 그대로
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  el.innerHTML = items.map(it => {
+    const totalKrw = Math.round(it.usdt * it.krw);
+    const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
+    const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
+    const sellerShort = `<span style="color:var(--gold)">${it.seller.slice(0,6)}</span>...${it.seller.slice(-4)}`;
+    const until = nowSec + it.remain; // 만료 시각 (초)
+    const buyBtn = isMine
+      ? `<div style="text-align:center;font-size:12px;color:var(--gold);margin-top:8px">내가 올린 거래입니다</div>
+         <button class="btn btn-sm btn-outline" style="margin-top:6px;width:100%" onclick="showTab('status')">⚙️ 관리하기 (가격 수정 · 취소 · 링크 복사)</button>`
+      : `<button class="btn btn-sm btn-success" style="margin-top:10px;width:100%" onclick="buyFromMarket('${it.tradeId}')">🛒 구매하기</button>`;
+    return `<div class="trade-item">
+      <div class="trade-item-header">
+        <span class="badge badge-pending">판매 중</span>
+        <span style="font-size:12px;color:var(--text3)" data-mkt-until="${until}">⏱ ${fmtRemain(it.remain)} 남음</span>
+      </div>
+      <div class="trade-item-amounts">
+        <span style="color:var(--mpc);font-weight:700">${it.mpcAmt.toLocaleString()} MPC</span>
+        <span style="color:var(--text3)">→</span>
+        <span style="color:var(--usdt);font-weight:700">${it.usdt.toFixed(1)} USDT</span>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-top:6px">1 MPC ≈ ${unitKrw.toLocaleString()}원 · 총 ${totalKrw.toLocaleString()}원</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">판매자: ${sellerShort}</div>
+      ${buyBtn}
+    </div>`;
+  }).join('');
+
+  startMarketCountdown();
+}
+
+// 장터 남은 시간 실시간 갱신 (1초마다)
+function startMarketCountdown() {
+  if (_marketCountdownInterval) clearInterval(_marketCountdownInterval);
+  _marketCountdownInterval = setInterval(() => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    document.querySelectorAll('[data-mkt-until]').forEach(elem => {
+      const remain = Number(elem.dataset.mktUntil) - nowSec;
+      if (remain <= 0) {
+        elem.textContent = '⏰ 만료됨';
+        elem.style.color = 'var(--danger)';
+      } else {
+        elem.textContent = `⏱ ${fmtRemain(remain)} 남음`;
+      }
+    });
+  }, 1000);
 }
 
 function buyFromMarket(tradeId) {
