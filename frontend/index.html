@@ -1472,6 +1472,7 @@ async function loadMarket() {
     }
 
     _marketItems = items;
+    _marketPage = 0;
     renderMarket();
   } catch (e) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">목록을 불러오지 못했습니다.<br>잠시 후 새로고침을 눌러주세요.</div>';
@@ -1483,15 +1484,26 @@ async function loadMarket() {
 // ── 장터 정렬 + 렌더 ─────────────────────────────────────────────────────
 let _marketItems = [];
 let _marketSort = 'new'; // 'new' | 'price'
+let _marketPage = 0;
+const MARKET_PAGE_SIZE = 5;
 let _marketCountdownInterval = null;
 
 function setMarketSort(mode) {
   _marketSort = mode;
+  _marketPage = 0; // 정렬 바꾸면 1페이지로
   const on  = 'flex:1;border:1px solid var(--gold)';
   const off = 'flex:1;border:1px solid var(--border)';
   document.getElementById('mktSortNew').style.cssText = mode === 'new' ? on : off;
   document.getElementById('mktSortPrice').style.cssText = mode === 'price' ? on : off;
   renderMarket();
+}
+
+function marketPageMove(dir) {
+  const maxPage = Math.ceil(_marketItems.length / MARKET_PAGE_SIZE) - 1;
+  _marketPage = Math.min(Math.max(0, _marketPage + dir), maxPage);
+  renderMarket();
+  // 페이지 넘기면 목록 맨 위로
+  document.getElementById('pageMarket').scrollIntoView({ behavior: 'instant', block: 'start' });
 }
 
 function renderMarket() {
@@ -1510,8 +1522,20 @@ function renderMarket() {
   }
   // 'new'는 로드 시 최신순 그대로
 
+  // 페이지 계산 (5개씩)
+  const totalPages = Math.ceil(items.length / MARKET_PAGE_SIZE);
+  if (_marketPage >= totalPages) _marketPage = totalPages - 1;
+  const pageItems = items.slice(_marketPage * MARKET_PAGE_SIZE, (_marketPage + 1) * MARKET_PAGE_SIZE);
+
+  const pager = totalPages > 1 ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 16px">
+      <button class="btn btn-sm btn-ghost" onclick="marketPageMove(-1)" ${_marketPage === 0 ? 'disabled' : ''}>◀ 이전</button>
+      <span style="font-size:13px;color:var(--text2)">${_marketPage + 1} / ${totalPages}</span>
+      <button class="btn btn-sm btn-ghost" onclick="marketPageMove(1)" ${_marketPage >= totalPages - 1 ? 'disabled' : ''}>다음 ▶</button>
+    </div>` : '';
+
   const nowSec = Math.floor(Date.now() / 1000);
-  el.innerHTML = items.map(it => {
+  el.innerHTML = pageItems.map(it => {
     const totalKrw = Math.round(it.usdt * it.krw);
     const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
     const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
@@ -1535,7 +1559,7 @@ function renderMarket() {
       <div style="font-size:12px;color:var(--text3);margin-top:4px">판매자: ${sellerShort}</div>
       ${buyBtn}
     </div>`;
-  }).join('');
+  }).join('') + pager;
 
   startMarketCountdown();
 }
