@@ -394,24 +394,43 @@ async function loadBalances() {
   }
 }
 
-// ── 전체 거래 현황 (컨트랙트 배포 시점부터 전체 조회) ────────────────────
-// 관리자는 오래된 잠긴 거래(만료 미처리)도 잡아야 하므로 배포 블록부터 전부 조회
-const DEPLOY_BLOCK = 89600000; // 2026-07-02 배포 직전 블록
-async function fetchTradeEvents() {
-  const chunkSizes = [45000, 9500]; // RPC 허용 범위에 따라 큰 청크부터 시도
-  for (const chunk of chunkSizes) {
-    for (const url of ADMIN_CONFIG.RPC_FALLBACKS) {
-      try {
-        const lp = new ethers.providers.JsonRpcProvider(url);
-        const lc = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, lp);
-        const latest = await lp.getBlockNumber();
-        const out = [];
-        for (let f = DEPLOY_BLOCK; f <= latest; f += chunk) {
-          out.push(...await lc.queryFilter(lc.filters.TradeRevealed(), f, Math.min(f + chunk - 1, latest)));
-        }
-        return out;
-      } catch { /* 다음 시도 */ }
-    }
+// ── 전체 거래 현황 (배포 시점부터 — 증분 캐시 방식) ──────────────────────
+// 한 번 조회한 블록 구간은 localStorage에 저장 → 다음 조회는 새 블록만 스캔
+// (이벤트의 불변 정보만 캐시하고, 거래 상태는 매번 체인에서 새로 확인)
+const DEPLOY_BLOCK = 89500000; // 2026-07-02 배포 직전 블록 (블록타임 1.5초 기준)
+const SCAN_KEY = 'admin_trade_scan_v1';
+
+function loadScanCache() {
+  try { return JSON.parse(localStorage.getItem(SCAN_KEY) || 'null') || { lastBlock: DEPLOY_BLOCK - 1, trades: {} }; }
+  catch { return { lastBlock: DEPLOY_BLOCK - 1, trades: {} }; }
+}
+function saveScanCache(cache) {
+  try { localStorage.setItem(SCAN_KEY, JSON.stringify(cache)); } catch {}
+}
+
+// startBlock~latest 구간을 청크로 나눠 병렬 조회 (진행률 콜백 지원)
+async function scanNewEvents(startBlock, onProgress) {
+  const CHUNK = 45000;
+  for (const url of ADMIN_CONFIG.RPC_FALLBACKS) {
+    try {
+      const lp = new ethers.providers.JsonRpcProvider(url);
+      const lc = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, lp);
+      const latest = await lp.getBlockNumber();
+      if (startBlock > latest) return { events: [], latest };
+      const ranges = [];
+      for (let f = startBlock; f <= latest; f += CHUNK) ranges.push([f, Math.min(f + CHUNK - 1, latest)]);
+      let done = 0;
+      const results = await Promise.all(ranges.map(([f, t]) =>
+        lc.queryFilter(lc.filters.TradeRevealed(), f, t).then(r => {
+          done++;
+          if (onProgress) onProgress(done, ranges.length);
+          return r;
+        })
+      ));
+      const events = [];
+      results.forEach(a => events.push(...a));
+      return { events, latest };
+    } catch { /* 다음 RPC 시도 */ }
   }
   return null;
 }
@@ -425,50 +444,81 @@ function fmtRemainAdmin(sec) {
 async function loadTrades() {
   const listEl = document.getElementById('tradeList');
   const statsEl = document.getElementById('tradeStats');
-  listEl.innerHTML = '<div class="empty-state">조회 중...</div>';
+  const cache = loadScanCache();
+  const firstScan = Object.keys(cache.trades).length === 0;
+  listEl.innerHTML = '<div class="empty-state">' + (firstScan
+    ? '최초 조회 중 — 배포 이후 전체 기록을 스캔합니다 (약 1분, 처음 한 번만)'
+    : '새 거래 확인 중...') + '</div>';
   try {
+    // 1. 캐시 이후의 새 블록만 스캔 (진행률 표시)
+    const scanned = await scanNewEvents(cache.lastBlock + 1, (done, total) => {
+      listEl.innerHTML = `<div class="empty-state">블록 스캔 중... (${done}/${total})</div>`;
+    });
+    if (scanned === null) throw new Error('scan');
+
+    // 2. 새 이벤트를 캐시에 병합 (불변 정보만)
+    for (const ev of scanned.events) {
+      cache.trades[ev.args.tradeId] = {
+        seller: ev.args.seller,
+        mpcAmt: parseFloat(ethers.utils.formatUnits(ev.args.mpcAmount, 18)),
+        usdt:   parseFloat(ethers.utils.formatUnits(ev.args.usdtAmount, 6)),
+      };
+    }
+    cache.lastBlock = scanned.latest;
+    saveScanCache(cache);
+
+    // 3. 모든 거래의 현재 상태를 체인에서 확인 (5개씩 병렬)
+    listEl.innerHTML = '<div class="empty-state">거래 상태 확인 중...</div>';
     const rp = await getReadProvider();
     if (!rp) throw new Error('rpc');
-    const events = await fetchTradeEvents();
-    if (events === null) throw new Error('events');
-
     const c = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, rp);
+    const ids = Object.keys(cache.trades);
+    const states = {};
+    for (let i = 0; i < ids.length; i += 5) {
+      await Promise.all(ids.slice(i, i + 5).map(async id => {
+        try { states[id] = await c.getTrade(id); } catch {}
+      }));
+    }
+
+    // 4. 렌더링
     const nowSec = Math.floor(Date.now() / 1000);
     const statusMap = { 2:'판매 중', 3:'진행 중', 4:'완료', 5:'취소', 6:'만료' };
     const colorMap  = { 2:'var(--gold)', 3:'var(--warning)', 4:'var(--success)', 5:'var(--danger)', 6:'var(--text3)' };
     const counts = { 2:0, 4:0, 5:0, 6:0 };
     let pendingMpcSum = 0;
-    const rows = [];
+    const items = [];
 
-    for (const ev of events.reverse()) { // 최신순
-      try {
-        const t = await c.getTrade(ev.args.tradeId);
-        const st = Number(t.status);
-        if (!statusMap[st]) continue;
-        if (counts[st] !== undefined) counts[st]++;
-        const mpcAmt = parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18));
-        const usdt   = parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6));
-        const createdAt = Number(t.createdAt);
-        const remain = createdAt + 86400 - nowSec;
-        // 판매 중인데 시간이 다 지난 것은 "만료 대기"로 표시
-        const label = (st === 2 && remain <= 0) ? '만료 대기 (반환 필요)' : statusMap[st];
-        if (st === 2 && remain > 0) pendingMpcSum += mpcAmt;
-        const buyer = t.buyer !== '0x0000000000000000000000000000000000000000' ? shortAddr(t.buyer) : '—';
-        const timeStr = new Date(createdAt * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
-        rows.push(`
-          <div class="tx-item">
-            <div class="tx-header">
-              <div style="font-size:13px;font-weight:700;color:${colorMap[st]}">${label}${st === 2 && remain > 0 ? ' · ' + fmtRemainAdmin(remain) + ' 남음' : ''}</div>
-              <div class="tx-id">${timeStr}</div>
-            </div>
-            <div class="tx-detail">
-              <strong>${mpcAmt.toLocaleString()} MPC</strong> → <strong>${usdt.toFixed(1)} USDT</strong><br>
-              판매자 ${shortAddr(t.seller)} · 구매자 ${buyer}
-            </div>
-            ${st === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${ev.args.tradeId}')">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
-          </div>`);
-      } catch { /* 개별 조회 실패 건너뜀 */ }
+    for (const id of ids) {
+      const t = states[id];
+      if (!t) continue;
+      const st = Number(t.status);
+      if (!statusMap[st]) continue;
+      if (counts[st] !== undefined) counts[st]++;
+      const cached = cache.trades[id];
+      const createdAt = Number(t.createdAt);
+      const remain = createdAt + 86400 - nowSec;
+      if (st === 2 && remain > 0) pendingMpcSum += cached.mpcAmt;
+      items.push({ id, st, remain, createdAt, cached, buyer: t.buyer, seller: t.seller });
     }
+    items.sort((a, b) => b.createdAt - a.createdAt); // 최신순
+
+    const rows = items.map(({ id, st, remain, createdAt, cached, buyer, seller }) => {
+      const label = (st === 2 && remain <= 0) ? '만료 대기 (반환 필요)' : statusMap[st];
+      const buyerStr = buyer !== '0x0000000000000000000000000000000000000000' ? shortAddr(buyer) : '—';
+      const timeStr = new Date(createdAt * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      return `
+        <div class="tx-item">
+          <div class="tx-header">
+            <div style="font-size:13px;font-weight:700;color:${colorMap[st]}">${label}${st === 2 && remain > 0 ? ' · ' + fmtRemainAdmin(remain) + ' 남음' : ''}</div>
+            <div class="tx-id">${timeStr}</div>
+          </div>
+          <div class="tx-detail">
+            <strong>${cached.mpcAmt.toLocaleString()} MPC</strong> → <strong>${cached.usdt.toFixed(1)} USDT</strong><br>
+            판매자 ${shortAddr(seller)} · 구매자 ${buyerStr}
+          </div>
+          ${st === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${id}')">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
+        </div>`;
+    });
 
     statsEl.innerHTML = `
       <div class="stat-row"><div class="stat-label">판매 중 (예치 잠금)</div><div class="stat-val">${counts[2]}건 · ${pendingMpcSum.toLocaleString()} MPC</div></div>
