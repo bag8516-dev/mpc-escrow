@@ -131,7 +131,7 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
 
     <!-- 전체 거래 현황 (최근 24시간) -->
     <div class="card">
-      <div class="card-title">📈 전체 거래 현황 (최근 24시간)</div>
+      <div class="card-title">📈 전체 거래 현황 (배포 이후 전체)</div>
       <div id="tradeStats"></div>
       <div id="tradeList" style="margin-top:12px;"><div class="empty-state">조회 중...</div></div>
       <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadTrades()">🔄 새로고침</button>
@@ -393,37 +393,22 @@ async function loadBalances() {
   }
 }
 
-// ── 전체 거래 현황 (최근 24시간, 이벤트 3단계 조회) ─────────────────────
+// ── 전체 거래 현황 (컨트랙트 배포 시점부터 전체 조회) ────────────────────
+// 관리자는 오래된 잠긴 거래(만료 미처리)도 잡아야 하므로 배포 블록부터 전부 조회
+const DEPLOY_BLOCK = 89600000; // 2026-07-02 배포 직전 블록
 async function fetchTradeEvents() {
-  const LOOKBACK = 46000; // 폴리곤 ~2초/블록 × 24시간 + 여유
-  const strategies = [
-    async (lc, latest) => lc.queryFilter(lc.filters.TradeRevealed(), Math.max(0, latest - LOOKBACK), latest),
-    async (lc, latest) => { // 10,000블록씩
-      const out = [];
-      for (let f = Math.max(0, latest - LOOKBACK); f <= latest; f += 10000)
-        out.push(...await lc.queryFilter(lc.filters.TradeRevealed(), f, Math.min(f + 9999, latest)));
-      return out;
-    },
-    async (lc, latest) => { // 250블록씩 8개 동시 (비상용)
-      const start = Math.max(0, latest - LOOKBACK);
-      const ranges = [];
-      for (let f = start; f <= latest; f += 250) ranges.push([f, Math.min(f + 249, latest)]);
-      const out = [];
-      for (let i = 0; i < ranges.length; i += 8) {
-        const results = await Promise.all(ranges.slice(i, i + 8).map(([f, t]) =>
-          lc.queryFilter(lc.filters.TradeRevealed(), f, t)));
-        results.forEach(a => out.push(...a));
-      }
-      return out;
-    },
-  ];
-  for (const strategy of strategies) {
+  const chunkSizes = [45000, 9500]; // RPC 허용 범위에 따라 큰 청크부터 시도
+  for (const chunk of chunkSizes) {
     for (const url of ADMIN_CONFIG.RPC_FALLBACKS) {
       try {
         const lp = new ethers.providers.JsonRpcProvider(url);
         const lc = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, lp);
         const latest = await lp.getBlockNumber();
-        return await strategy(lc, latest);
+        const out = [];
+        for (let f = DEPLOY_BLOCK; f <= latest; f += chunk) {
+          out.push(...await lc.queryFilter(lc.filters.TradeRevealed(), f, Math.min(f + chunk - 1, latest)));
+        }
+        return out;
       } catch { /* 다음 시도 */ }
     }
   }
@@ -488,7 +473,7 @@ async function loadTrades() {
       <div class="stat-row"><div class="stat-label">완료</div><div class="stat-val" style="color:var(--success)">${counts[4]}건</div></div>
       <div class="stat-row"><div class="stat-label">취소 / 만료</div><div class="stat-val" style="color:var(--text3)">${counts[5]}건 / ${counts[6]}건</div></div>`;
 
-    listEl.innerHTML = rows.length > 0 ? rows.join('') : '<div class="empty-state">최근 24시간 거래가 없습니다</div>';
+    listEl.innerHTML = rows.length > 0 ? rows.join('') : '<div class="empty-state">거래 내역이 없습니다</div>';
   } catch {
     statsEl.innerHTML = '';
     listEl.innerHTML = '<div class="empty-state">조회 실패 — 새로고침을 눌러주세요</div>';
