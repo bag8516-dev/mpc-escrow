@@ -516,7 +516,7 @@ async function loadTrades() {
             <strong>${cached.mpcAmt.toLocaleString()} MPC</strong> → <strong>${cached.usdt.toFixed(1)} USDT</strong><br>
             판매자 ${shortAddr(seller)} · 구매자 ${buyerStr}
           </div>
-          ${st === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${id}')">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
+          ${st === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${id}', this)">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
         </div>`;
     });
 
@@ -533,10 +533,25 @@ async function loadTrades() {
 }
 
 // ── 만료 처리 (누구나 호출 가능, MPC는 원래 판매자에게 반환됨) ──────────
-async function adminExpire(tradeId) {
+// Trust Wallet 브라우저는 confirm() 미지원 → 버튼 두 번 누르기 방식으로 확인
+async function adminExpire(tradeId, btn) {
   if (!ethersSigner) { showToast('지갑을 먼저 연결해주세요'); return; }
-  if (!confirm('이 거래를 만료 처리할까요?\nMPC는 원래 판매자 지갑으로 자동 반환됩니다.')) return;
+
+  // 1번째 클릭: 확인 대기 상태로 전환 (5초 내 재클릭 시 실행)
+  if (btn && btn.dataset.armed !== '1') {
+    btn.dataset.armed = '1';
+    btn.textContent = '⚠️ 한 번 더 누르면 실행됩니다 (판매자에게 반환)';
+    setTimeout(() => {
+      if (btn.dataset.armed === '1') {
+        btn.dataset.armed = '';
+        btn.textContent = '⏰ 만료 처리 (판매자에게 MPC 반환)';
+      }
+    }, 5000);
+    return;
+  }
+
   try {
+    if (btn) { btn.disabled = true; btn.textContent = '처리 중... (Trust Wallet에서 서명해주세요)'; }
     showToast('만료 처리 트랜잭션 전송 중...');
     const esc = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_ADMIN_ABI, ethersSigner);
     const tx = await esc.expireTrade(tradeId);
@@ -545,6 +560,7 @@ async function adminExpire(tradeId) {
     loadTrades();
     loadBalances();
   } catch (err) {
+    if (btn) { btn.disabled = false; btn.dataset.armed = ''; btn.textContent = '⏰ 만료 처리 (판매자에게 MPC 반환)'; }
     showToast('실패: ' + String(err?.reason || err?.message || err).slice(0, 80));
   }
 }
