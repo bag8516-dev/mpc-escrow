@@ -399,6 +399,9 @@ a { color:var(--gold); text-decoration:none; }
       <button class="btn btn-sm btn-ghost" onclick="loadMarket()" id="btnMarketRefresh">🔄 새로고침</button>
     </div>
     <div style="padding:8px 16px 0;font-size:12px;color:var(--text3)">판매 글은 게시 후 24시간 동안 유효합니다. 최신 목록은 새로고침으로 확인하세요.</div>
+    <div style="padding:12px 16px 0">
+      <button class="btn btn-primary" onclick="showTab('sell')">➕ 내 MPC 판매 글 올리기</button>
+    </div>
     <div id="marketList">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">불러오는 중...</div>
     </div>
@@ -428,11 +431,11 @@ a { color:var(--gold); text-decoration:none; }
 
 <!-- ─── 하단 탭바 (연결 후) ───────────────────────────────── -->
 <div class="tab-bar" id="tabBar" style="display:none">
-  <div class="tab-item active" onclick="showTab('sell')" id="tab-sell">
-    <span class="tab-icon">💰</span><span>판매</span>
-  </div>
-  <div class="tab-item" onclick="showTab('market')" id="tab-market">
+  <div class="tab-item active" onclick="showTab('market')" id="tab-market">
     <span class="tab-icon">🏪</span><span>장터</span>
+  </div>
+  <div class="tab-item" onclick="showTab('sell')" id="tab-sell">
+    <span class="tab-icon">💰</span><span>판매</span>
   </div>
   <div class="tab-item" onclick="showTab('status')" id="tab-status">
     <span class="tab-icon">📊</span><span>진행 중</span>
@@ -830,7 +833,7 @@ function onWalletConnected() {
   if (currentTradeId) {
     showBuyerPage(currentTradeId);
   } else {
-    showTab('sell');
+    showTab('market');
   }
 
   // 거래 목록 갱신
