@@ -1661,9 +1661,17 @@ function buyFromMarket(tradeId) {
   showBuyerPage(tradeId);
 }
 
+// 현재 연결된 지갑이 판매자 또는 구매자인 거래만 표시
+// (한 폰에서 여러 지갑을 써도 지갑별로 자기 거래만 보이도록)
+function isMyTrade(t) {
+  if (!walletAddress) return false;
+  const me = walletAddress.toLowerCase();
+  return (t.seller && t.seller.toLowerCase() === me) || (t.buyer && t.buyer.toLowerCase() === me);
+}
+
 function renderStatusList(trades) {
   const el = document.getElementById('statusList');
-  const active = Object.values(trades).filter(t => t.status === 'PENDING' || t.status === 'ACTIVE');
+  const active = Object.values(trades).filter(t => (t.status === 'PENDING' || t.status === 'ACTIVE') && isMyTrade(t));
   if (active.length === 0) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">진행 중인 거래가 없습니다</div>';
     return;
@@ -1673,7 +1681,7 @@ function renderStatusList(trades) {
 
 function renderHistoryList(trades) {
   const el = document.getElementById('historyList');
-  const all = Object.values(trades).sort((a,b) => b.createdAt - a.createdAt);
+  const all = Object.values(trades).filter(isMyTrade).sort((a,b) => b.createdAt - a.createdAt);
   if (all.length === 0) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">거래 내역이 없습니다</div>';
     return;
