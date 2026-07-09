@@ -129,6 +129,14 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
       <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadBalances()">🔄 새로고침</button>
     </div>
 
+    <!-- 전체 거래 현황 (최근 24시간) -->
+    <div class="card">
+      <div class="card-title">📈 전체 거래 현황 (최근 24시간)</div>
+      <div id="tradeStats"></div>
+      <div id="tradeList" style="margin-top:12px;"><div class="empty-state">조회 중...</div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadTrades()">🔄 새로고침</button>
+    </div>
+
     <!-- 대기 중인 서명 요청 -->
     <div class="card">
       <div class="card-title">✍️ 대기 중인 서명 요청</div>
@@ -211,10 +219,11 @@ const ADMIN_CONFIG = {
     '0xF07ab48453B4f97cC15966a6F06F815399ea00c1',
   ],
   RPC_FALLBACKS: [
-    'https://polygon-rpc.com',
+    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
+    'https://polygon-bor-rpc.publicnode.com',
+    'https://polygon.drpc.org',
+    'https://1rpc.io/matic',
     'https://polygon-pokt.nodies.app',
-    'https://polygon.llamarpc.com',
-    'https://rpc.ankr.com/polygon',
   ],
 };
 
@@ -234,6 +243,11 @@ const ESCROW_ADMIN_ABI = [
 
 const ERC20_ABI = [
   'function balanceOf(address account) view returns (uint256)',
+];
+
+const ESCROW_VIEW_ABI = [
+  'event TradeRevealed(bytes32 indexed tradeId, address indexed seller, uint256 mpcAmount, uint256 usdtAmount, uint256 krwPerUsdt)',
+  'function getTrade(bytes32 tradeId) view returns (tuple(address seller,address buyer,uint256 mpcAmount,uint256 usdtPricePerMPC,uint256 usdtAmount,uint256 krwPerUsdt,uint256 createdAt,uint256 sellerDepositBlock,uint8 status,bool sellerDeposited,bool buyerDeposited,bytes32 commitHash))',
 ];
 
 // ── 전역 상태 ─────────────────────────────────────────────────────────────
@@ -344,7 +358,7 @@ async function connectWallet() {
     });
 
     // 데이터 로드
-    await Promise.all([loadBalances(), loadTxList()]);
+    await Promise.all([loadBalances(), loadTxList(), loadTrades()]);
 
   } catch (err) {
     setBtn('btnConnect', '🔗 관리자 지갑 연결하기', false);
@@ -376,6 +390,108 @@ async function loadBalances() {
   } catch (err) {
     document.getElementById('statMpc').textContent  = '조회 실패';
     document.getElementById('statUsdt').textContent = '조회 실패';
+  }
+}
+
+// ── 전체 거래 현황 (최근 24시간, 이벤트 3단계 조회) ─────────────────────
+async function fetchTradeEvents() {
+  const LOOKBACK = 46000; // 폴리곤 ~2초/블록 × 24시간 + 여유
+  const strategies = [
+    async (lc, latest) => lc.queryFilter(lc.filters.TradeRevealed(), Math.max(0, latest - LOOKBACK), latest),
+    async (lc, latest) => { // 10,000블록씩
+      const out = [];
+      for (let f = Math.max(0, latest - LOOKBACK); f <= latest; f += 10000)
+        out.push(...await lc.queryFilter(lc.filters.TradeRevealed(), f, Math.min(f + 9999, latest)));
+      return out;
+    },
+    async (lc, latest) => { // 250블록씩 8개 동시 (비상용)
+      const start = Math.max(0, latest - LOOKBACK);
+      const ranges = [];
+      for (let f = start; f <= latest; f += 250) ranges.push([f, Math.min(f + 249, latest)]);
+      const out = [];
+      for (let i = 0; i < ranges.length; i += 8) {
+        const results = await Promise.all(ranges.slice(i, i + 8).map(([f, t]) =>
+          lc.queryFilter(lc.filters.TradeRevealed(), f, t)));
+        results.forEach(a => out.push(...a));
+      }
+      return out;
+    },
+  ];
+  for (const strategy of strategies) {
+    for (const url of ADMIN_CONFIG.RPC_FALLBACKS) {
+      try {
+        const lp = new ethers.providers.JsonRpcProvider(url);
+        const lc = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, lp);
+        const latest = await lp.getBlockNumber();
+        return await strategy(lc, latest);
+      } catch { /* 다음 시도 */ }
+    }
+  }
+  return null;
+}
+
+function fmtRemainAdmin(sec) {
+  if (sec >= 3600) return Math.floor(sec/3600) + '시간 ' + Math.floor((sec%3600)/60) + '분';
+  if (sec >= 60)   return Math.floor(sec/60) + '분';
+  return sec + '초';
+}
+
+async function loadTrades() {
+  const listEl = document.getElementById('tradeList');
+  const statsEl = document.getElementById('tradeStats');
+  listEl.innerHTML = '<div class="empty-state">조회 중...</div>';
+  try {
+    const rp = await getReadProvider();
+    if (!rp) throw new Error('rpc');
+    const events = await fetchTradeEvents();
+    if (events === null) throw new Error('events');
+
+    const c = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, rp);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const statusMap = { 2:'판매 중', 3:'진행 중', 4:'완료', 5:'취소', 6:'만료' };
+    const colorMap  = { 2:'var(--gold)', 3:'var(--warning)', 4:'var(--success)', 5:'var(--danger)', 6:'var(--text3)' };
+    const counts = { 2:0, 4:0, 5:0, 6:0 };
+    let pendingMpcSum = 0;
+    const rows = [];
+
+    for (const ev of events.reverse()) { // 최신순
+      try {
+        const t = await c.getTrade(ev.args.tradeId);
+        const st = Number(t.status);
+        if (!statusMap[st]) continue;
+        if (counts[st] !== undefined) counts[st]++;
+        const mpcAmt = parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18));
+        const usdt   = parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6));
+        const createdAt = Number(t.createdAt);
+        const remain = createdAt + 86400 - nowSec;
+        // 판매 중인데 시간이 다 지난 것은 "만료 대기"로 표시
+        const label = (st === 2 && remain <= 0) ? '만료 대기 (반환 필요)' : statusMap[st];
+        if (st === 2 && remain > 0) pendingMpcSum += mpcAmt;
+        const buyer = t.buyer !== '0x0000000000000000000000000000000000000000' ? shortAddr(t.buyer) : '—';
+        const timeStr = new Date(createdAt * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        rows.push(`
+          <div class="tx-item">
+            <div class="tx-header">
+              <div style="font-size:13px;font-weight:700;color:${colorMap[st]}">${label}${st === 2 && remain > 0 ? ' · ' + fmtRemainAdmin(remain) + ' 남음' : ''}</div>
+              <div class="tx-id">${timeStr}</div>
+            </div>
+            <div class="tx-detail">
+              <strong>${mpcAmt.toLocaleString()} MPC</strong> → <strong>${usdt.toFixed(1)} USDT</strong><br>
+              판매자 ${shortAddr(t.seller)} · 구매자 ${buyer}
+            </div>
+          </div>`);
+      } catch { /* 개별 조회 실패 건너뜀 */ }
+    }
+
+    statsEl.innerHTML = `
+      <div class="stat-row"><div class="stat-label">판매 중 (예치 잠금)</div><div class="stat-val">${counts[2]}건 · ${pendingMpcSum.toLocaleString()} MPC</div></div>
+      <div class="stat-row"><div class="stat-label">완료</div><div class="stat-val" style="color:var(--success)">${counts[4]}건</div></div>
+      <div class="stat-row"><div class="stat-label">취소 / 만료</div><div class="stat-val" style="color:var(--text3)">${counts[5]}건 / ${counts[6]}건</div></div>`;
+
+    listEl.innerHTML = rows.length > 0 ? rows.join('') : '<div class="empty-state">최근 24시간 거래가 없습니다</div>';
+  } catch {
+    statsEl.innerHTML = '';
+    listEl.innerHTML = '<div class="empty-state">조회 실패 — 새로고침을 눌러주세요</div>';
   }
 }
 
