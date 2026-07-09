@@ -239,6 +239,7 @@ const MULTISIG_ABI = [
 
 const ESCROW_ADMIN_ABI = [
   'function emergencyWithdraw(address token, uint256 amount, address to)',
+  'function expireTrade(bytes32 tradeId)',
 ];
 
 const ERC20_ABI = [
@@ -464,6 +465,7 @@ async function loadTrades() {
               <strong>${mpcAmt.toLocaleString()} MPC</strong> → <strong>${usdt.toFixed(1)} USDT</strong><br>
               판매자 ${shortAddr(t.seller)} · 구매자 ${buyer}
             </div>
+            ${st === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${ev.args.tradeId}')">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
           </div>`);
       } catch { /* 개별 조회 실패 건너뜀 */ }
     }
@@ -477,6 +479,23 @@ async function loadTrades() {
   } catch {
     statsEl.innerHTML = '';
     listEl.innerHTML = '<div class="empty-state">조회 실패 — 새로고침을 눌러주세요</div>';
+  }
+}
+
+// ── 만료 처리 (누구나 호출 가능, MPC는 원래 판매자에게 반환됨) ──────────
+async function adminExpire(tradeId) {
+  if (!ethersSigner) { showToast('지갑을 먼저 연결해주세요'); return; }
+  if (!confirm('이 거래를 만료 처리할까요?\nMPC는 원래 판매자 지갑으로 자동 반환됩니다.')) return;
+  try {
+    showToast('만료 처리 트랜잭션 전송 중...');
+    const esc = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_ADMIN_ABI, ethersSigner);
+    const tx = await esc.expireTrade(tradeId);
+    await tx.wait();
+    showToast('✅ 만료 처리 완료 — 판매자에게 MPC 반환됨');
+    loadTrades();
+    loadBalances();
+  } catch (err) {
+    showToast('실패: ' + String(err?.reason || err?.message || err).slice(0, 80));
   }
 }
 
