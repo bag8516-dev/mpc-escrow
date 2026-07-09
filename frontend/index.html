@@ -1458,11 +1458,17 @@ async function fetchMarketEvents() {
 
   // 전략별 조회 함수
   const strategies = [
-    async (lc, latest) => { // ① 한 번에
+    async (lc, latest) => { // ① 5조각 동시 조회 (가장 빠름)
       const start = Math.max(0, latest - LOOKBACK);
-      return await lc.queryFilter(lc.filters.TradeRevealed(), start, latest);
+      const step = Math.ceil(LOOKBACK / 5);
+      const ranges = [];
+      for (let from = start; from <= latest; from += step) ranges.push([from, Math.min(from + step - 1, latest)]);
+      const results = await Promise.all(ranges.map(([f, t]) => lc.queryFilter(lc.filters.TradeRevealed(), f, t)));
+      const out = [];
+      results.forEach(a => out.push(...a));
+      return out;
     },
-    async (lc, latest) => { // ② 10,000블록씩
+    async (lc, latest) => { // ② 10,000블록씩 순차
       const start = Math.max(0, latest - LOOKBACK);
       const out = [];
       for (let from = start; from <= latest; from += 10000) {
@@ -1515,22 +1521,29 @@ async function loadMarket() {
     if (events === null) throw new Error('이벤트 조회 실패');
 
     const nowSec = Math.floor(Date.now() / 1000);
+    const ordered = events.reverse(); // 최신 거래부터
+    // 거래 상태를 5건씩 동시 조회 (순차 조회 대비 5배 빠름)
+    const states = new Array(ordered.length).fill(null);
+    for (let i = 0; i < ordered.length; i += 5) {
+      await Promise.all(ordered.slice(i, i + 5).map(async (ev, j) => {
+        try { states[i + j] = await c.getTrade(ev.args.tradeId); } catch {}
+      }));
+    }
     const items = [];
-    for (const ev of events.reverse()) { // 최신 거래부터
-      try {
-        const t = await c.getTrade(ev.args.tradeId);
-        if (Number(t.status) !== 2) continue; // PENDING(구매 가능)만 표시
-        const remain = Number(t.createdAt) + CONFIG.TRADE_TIMEOUT - nowSec;
-        if (remain <= 0) continue;
-        items.push({
-          tradeId: ev.args.tradeId,
-          seller:  t.seller,
-          mpcAmt:  parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18)),
-          usdt:    parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6)),
-          krw:     Number(t.krwPerUsdt),
-          remain,
-        });
-      } catch { /* 개별 거래 조회 실패는 건너뜀 */ }
+    for (let i = 0; i < ordered.length; i++) {
+      const t = states[i];
+      if (!t) continue;
+      if (Number(t.status) !== 2) continue; // PENDING(구매 가능)만 표시
+      const remain = Number(t.createdAt) + CONFIG.TRADE_TIMEOUT - nowSec;
+      if (remain <= 0) continue;
+      items.push({
+        tradeId: ordered[i].args.tradeId,
+        seller:  t.seller,
+        mpcAmt:  parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18)),
+        usdt:    parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6)),
+        krw:     Number(t.krwPerUsdt),
+        remain,
+      });
     }
 
     _marketItems = items;
