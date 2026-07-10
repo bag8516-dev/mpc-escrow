@@ -896,6 +896,7 @@ async function connectViaWalletConnect(btn) {
       wcProvider = await WCEP.init({
         projectId: CONFIG.WC_PROJECT_ID,
         chains: [CONFIG.CHAIN_ID],
+        rpcMap: { [CONFIG.CHAIN_ID]: 'https://rpc-mainnet.matic.quiknode.pro' }, // 조회·가스추정용 RPC (기본 WC RPC 불안정 대비)
         showQrModal: false,
         metadata: {
           name: 'MPC 에스크로',
@@ -1224,16 +1225,20 @@ async function createTradeFlow() {
   );
   if (!riskOk) return;
 
-  // 2. POL 잔액 확인
-  const hasGas = await checkPolBalance();
-  if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
+  // 2. POL·MPC 잔액 확인 (조회 실패도 안내창으로 처리)
+  try {
+    const hasGas = await checkPolBalance();
+    if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
 
-  // 2-1. MPC 잔액 확인
-  const mpcBalance = await mpcContract.balanceOf(walletAddress);
-  const mpcNeeded = bigIntMpc(mpcAmt);
-  if (mpcBalance.lt(mpcNeeded)) {
-    const have = parseFloat(ethers.utils.formatUnits(mpcBalance, 18)).toFixed(2);
-    showError(`❌ MPC 잔액 부족<br><br>필요: ${mpcAmt.toLocaleString()} MPC<br>보유: ${have} MPC<br><br>판매할 MPC를 지갑에 먼저 입금해주세요.`);
+    const mpcBalance = await readTokenBalance(CONFIG.MPC_TOKEN, walletAddress);
+    const mpcNeeded = bigIntMpc(mpcAmt);
+    if (mpcBalance.lt(mpcNeeded)) {
+      const have = parseFloat(ethers.utils.formatUnits(mpcBalance, 18)).toFixed(2);
+      showError(`❌ MPC 잔액 부족<br><br>필요: ${mpcAmt.toLocaleString()} MPC<br>보유: ${have} MPC<br><br>판매할 MPC를 지갑에 먼저 입금해주세요.`);
+      return;
+    }
+  } catch (err) {
+    showError(parseError(err));
     return;
   }
 
@@ -1402,8 +1407,10 @@ async function buyDepositFlow() {
   if (!requireWallet()) return;
   if (!currentTradeId) { showError('거래 ID가 없습니다'); return; }
 
-  const hasGas = await checkPolBalance();
-  if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
+  try {
+    const hasGas = await checkPolBalance();
+    if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
+  } catch (err) { showError(parseError(err)); return; }
 
   const addrOk = await showAddrConfirm(walletAddress);
   if (!addrOk) return;
@@ -1430,7 +1437,7 @@ async function buyDepositFlow() {
     const usdtAmt = ethers.BigNumber.from(trade.usdtAmount);
 
     // USDT 잔액 확인
-    const usdtBalance = await usdtContract.balanceOf(walletAddress);
+    const usdtBalance = await readTokenBalance(CONFIG.USDT_TOKEN, walletAddress);
     if (usdtBalance.lt(usdtAmt)) {
       resetButton(btn, 'USDT 예치하고 구매하기');
       const need = (Number(usdtAmt) / 1e6).toFixed(1);
@@ -2090,9 +2097,30 @@ async function getRemainingTime(tradeId) {
   } catch { return 0; }
 }
 async function checkPolBalance() {
-  if (!window.__ethersProvider || !walletAddress) return true;
-  const bal = await window.__ethersProvider.getBalance(walletAddress);
-  return bal.gt(ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString()));
+  if (!walletAddress) return true;
+  // 조회는 공용 RPC로 (WalletConnect 경유 조회는 불안정할 수 있음)
+  try {
+    const readP = await getReadProvider();
+    if (readP) {
+      const bal = await readP.getBalance(walletAddress);
+      return bal.gt(ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString()));
+    }
+  } catch { /* 아래 지갑 경유로 재시도 */ }
+  try {
+    const bal = await window.__ethersProvider.getBalance(walletAddress);
+    return bal.gt(ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString()));
+  } catch { return true; } // 조회 실패 시 차단하지 않음 (가스 부족이면 어차피 서명 단계에서 안내됨)
+}
+
+// 토큰 잔액 조회 (공용 RPC 우선, 실패 시 지갑 경유)
+async function readTokenBalance(tokenAddr, owner) {
+  const abi = ['function balanceOf(address) view returns (uint256)'];
+  try {
+    const readP = await getReadProvider();
+    if (readP) return await new ethers.Contract(tokenAddr, abi, readP).balanceOf(owner);
+  } catch { /* 지갑 경유 재시도 */ }
+  const c = tokenAddr === CONFIG.MPC_TOKEN ? mpcContract : usdtContract;
+  return await c.balanceOf(owner);
 }
 
 // ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
