@@ -279,10 +279,15 @@ window.addEventListener('appinstalled', function() {
   var b = document.getElementById('btnInstallApp');
   if (b) b.style.display = 'none';
 });
+// 인앱 브라우저(카카오톡/네이버 등)에서는 홈 화면 추가 불가 → 안내로 유도
+function isInAppBrowser() {
+  return /KAKAOTALK|NAVER|Instagram|FBAV|Line\//i.test(navigator.userAgent);
+}
 document.addEventListener('DOMContentLoaded', function() {
   var isIos = /iPhone|iPad/i.test(navigator.userAgent);
   var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-  if (isIos && !standalone) {
+  // 아이폰(사파리·인앱 모두) 또는 안드로이드 인앱 브라우저 → 버튼 노출 (안내 방식)
+  if (!standalone && (isIos || isInAppBrowser())) {
     var b = document.getElementById('btnInstallApp');
     if (b) b.style.display = 'block';
   }
@@ -290,14 +295,23 @@ document.addEventListener('DOMContentLoaded', function() {
 function installApp() {
   if (__installPrompt) { __installPrompt.prompt(); return; }
   var ov = document.getElementById('iosInstallGuide');
-  if (ov) ov.style.display = 'flex';
+  if (ov) {
+    var notice = document.getElementById('inappNotice');
+    if (notice) notice.style.display = isInAppBrowser() ? 'block' : 'none';
+    ov.style.display = 'flex';
+  }
 }
 </script>
 
-<!-- 아이폰 홈 화면 추가 안내 -->
-<div id="iosInstallGuide" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9998;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:14px" onclick="this.style.display='none'">
+<!-- 아이폰/인앱브라우저 홈 화면 추가 안내 -->
+<div id="iosInstallGuide" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9998;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:14px" onclick="this.style.display='none'">
   <div style="font-size:44px">📲</div>
   <div style="font-size:18px;font-weight:800">홈 화면에 추가하는 방법</div>
+  <div id="inappNotice" style="display:none;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.4);border-radius:10px;padding:12px 14px;color:#E2C06A;font-size:14px;line-height:1.8;text-align:left">
+    ⚠️ 지금 <strong>카카오톡 브라우저</strong>에서 보고 계십니다.<br>
+    홈 화면 추가는 여기서 안 되니, 먼저 화면 하단(또는 우측 상단) 메뉴에서
+    <strong>"Safari로 열기"</strong> 또는 <strong>"다른 브라우저로 열기"</strong>를 눌러주세요.
+  </div>
   <div style="color:#B8C6D8;font-size:15px;line-height:2;text-align:left">
     1️⃣ 사파리 하단의 <strong>공유 버튼</strong> <span style="border:1px solid #5A7090;border-radius:6px;padding:1px 8px">⬆️</span> 을 누르세요<br>
     2️⃣ 목록에서 <strong>"홈 화면에 추가"</strong>를 선택하세요<br>
