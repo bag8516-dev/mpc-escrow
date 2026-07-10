@@ -1266,17 +1266,21 @@ async function createTradeFlow() {
   showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
 
   try {
-    // 4. 서명 1: Approve MPC
-    await showSignGuide(
-      'MPC 사용 허락',
-      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 MPC를 안전하게 보관할 수 있도록 허락하는 단계입니다 <strong>(이 단계에서 MPC가 빠져나가지 않습니다)</strong></div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
-      1, 2
-    );
-
+    // 4. 서명 1: Approve MPC (이전 승인이 남아있으면 건너뛰어 왕복 절약)
     const mpcAmountWei = bigIntMpc(mpcAmt);
-    await approveMpc(mpcAmountWei);
+    const mpcAllowance = await readAllowance(CONFIG.MPC_TOKEN, walletAddress);
+    if (mpcAllowance.lt(mpcAmountWei)) {
+      await showSignGuide(
+        'MPC 사용 허락',
+        `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
+         <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 MPC를 안전하게 보관할 수 있도록 허락하는 단계입니다 <strong>(이 단계에서 MPC가 빠져나가지 않습니다)</strong></div></div>
+         <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
+        1, 2
+      );
+      await approveMpc(mpcAmountWei);
+    } else {
+      showToast('✅ 이미 승인되어 있어 승인 단계를 건너뜁니다');
+    }
 
     // 5. Commit (front-run 방지)
     const secret = crypto.getRandomValues(new Uint8Array(32));
@@ -1461,16 +1465,20 @@ async function buyDepositFlow() {
       return;
     }
 
-    // 서명 1: Approve USDT
-    await showSignGuide(
-      'USDT 사용 허락',
-      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
-       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 USDT를 가져갈 수 있도록 허락하는 단계입니다 <strong>(아직 USDT가 빠져나가지 않습니다)</strong></div></div>
-       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
-      1, 2
-    );
-
-    await approveUsdt(usdtAmt);
+    // 서명 1: Approve USDT (이전 승인이 남아있으면 건너뛰어 왕복 절약)
+    const usdtAllowance = await readAllowance(CONFIG.USDT_TOKEN, walletAddress);
+    if (usdtAllowance.lt(usdtAmt)) {
+      await showSignGuide(
+        'USDT 사용 허락',
+        `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
+         <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">에스크로가 내 USDT를 가져갈 수 있도록 허락하는 단계입니다 <strong>(아직 USDT가 빠져나가지 않습니다)</strong></div></div>
+         <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">Trust Wallet에서 <strong>"확인"</strong>을 눌러주세요</div></div>`,
+        1, 2
+      );
+      await approveUsdt(usdtAmt);
+    } else {
+      showToast('✅ 이미 승인되어 있어 승인 단계를 건너뜁니다');
+    }
 
     // 서명 2: buyerDeposit
     await showSignGuide(
@@ -2136,6 +2144,19 @@ async function readTokenBalance(tokenAddr, owner) {
   } catch { /* 지갑 경유 재시도 */ }
   const c = tokenAddr === CONFIG.MPC_TOKEN ? mpcContract : usdtContract;
   return await c.balanceOf(owner);
+}
+
+// 기존 승인(Allowance) 조회 — 남은 승인이 충분하면 승인 서명을 건너뛰어 왕복 1회 절약
+async function readAllowance(tokenAddr, owner) {
+  const abi = ['function allowance(address,address) view returns (uint256)'];
+  try {
+    const readP = await getReadProvider();
+    if (readP) return await new ethers.Contract(tokenAddr, abi, readP).allowance(owner, CONFIG.ESCROW_PROXY);
+  } catch { /* 지갑 경유 재시도 */ }
+  try {
+    const c = tokenAddr === CONFIG.MPC_TOKEN ? mpcContract : usdtContract;
+    return await c.allowance(owner, CONFIG.ESCROW_PROXY);
+  } catch { return ethers.constants.Zero; } // 조회 실패 시 승인 진행 (안전한 기본값)
 }
 
 // ── commit hash 계산 (ethers.js solidityKeccak256) ────────────────────────
