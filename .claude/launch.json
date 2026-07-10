@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "MPC Escrow Frontend",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-s", "frontend", "-l", "3000"],
+      "port": 3000
+    }
+  ]
+}

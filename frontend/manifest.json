@@ -1,0 +1,16 @@
+{
+  "name": "MPC 에스크로",
+  "short_name": "MPC 에스크로",
+  "description": "안전한 MPC ↔ USDT P2P 거래 — 스마트 컨트랙트가 자산을 보증합니다",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0F1E",
+  "theme_color": "#0A0F1E",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
