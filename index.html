@@ -840,6 +840,21 @@ function setDeviceGuide() {
   }
 }
 
+// ── Trust Wallet 딥링크 (기기별) ──────────────────────────────────────────
+// 안드로이드: 카카오톡 등 인앱 브라우저에서 https 유니버설 링크가 앱을 못 여는 경우가 있어
+//             intent:// 방식으로 Trust Wallet을 직접 지정 (실패 시 https 링크로 폴백)
+// 아이폰: https 유니버설 링크가 안정적으로 작동
+function twDeepLink(targetUrl) {
+  const enc = encodeURIComponent(targetUrl);
+  const universal = 'https://link.trustwallet.com/open_url?coin_id=966&url=' + enc;
+  if (/Android/i.test(navigator.userAgent)) {
+    return 'intent://open_url?coin_id=966&url=' + enc
+      + '#Intent;package=com.wallet.crypto.trustapp;scheme=trust;S.browser_fallback_url='
+      + encodeURIComponent(universal) + ';end';
+  }
+  return universal;
+}
+
 // ── 지갑 연결 ──────────────────────────────────────────────────────────────
 async function connectWallet() {
   const btn = document.getElementById('btnConnect');
@@ -876,7 +891,7 @@ async function connectWallet() {
       showToast('📲 Trust Wallet에서 이어서 진행됩니다', 3500);
       const target = location.origin + location.pathname
         + (location.search ? location.search + '&' : '?') + 'autoconnect=1';
-      window.location.href = 'https://link.trustwallet.com/open_url?coin_id=966&url=' + encodeURIComponent(target);
+      window.location.href = twDeepLink(target);
       // Trust Wallet이 안 열리는 경우 대비 (미설치 등): 버튼 복구
       setTimeout(() => resetButton(btn, '🔗 지갑 연결하기'), 4000);
       return;
@@ -1330,10 +1345,9 @@ async function createTradeFlow() {
       createdAt: Date.now(), status: 'PENDING', secret: secretHex
     });
 
-    // 8. 공유 링크 표시 (Trust Wallet 딥링크로 변환)
+    // 8. 공유 링크 표시 (일반 주소 — 받는 사람 기기와 무관하게 열리며, 접속 후 버튼이 기기에 맞게 Trust Wallet을 연다)
     const pageUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
-    const deepLink = `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(pageUrl)}`;
-    document.getElementById('shareUrl').textContent = deepLink;
+    document.getElementById('shareUrl').textContent = pageUrl;
     document.getElementById('modalShareLink').classList.add('show');
 
     resetButton(btn, '거래 생성하기');
@@ -1987,11 +2001,10 @@ function tradeItemHtml(t) {
 
 function copyTradeLink(tradeId) {
   const pageUrl = `${location.origin}${location.pathname}?t=${tradeId}`;
-  const deepLink = `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(pageUrl)}`;
-  navigator.clipboard.writeText(deepLink).then(() => {
+  navigator.clipboard.writeText(pageUrl).then(() => {
     showToast('✅ 링크 복사 완료! 카카오톡으로 전송하세요');
   }).catch(() => {
-    showError('링크 복사에 실패했습니다.<br>직접 복사하세요:<br><br><small style="word-break:break-all">' + deepLink + '</small>');
+    showError('링크 복사에 실패했습니다.<br>직접 복사하세요:<br><br><small style="word-break:break-all">' + pageUrl + '</small>');
   });
 }
 
