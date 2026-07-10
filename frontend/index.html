@@ -1859,7 +1859,6 @@ function renderMarket() {
     const totalKrw = Math.round(it.usdt * it.krw);
     const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
     const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
-    const sellerShort = `<span style="color:var(--gold)">${it.seller.slice(0,6)}</span>...${it.seller.slice(-4)}`;
     const until = nowSec + it.remain; // 만료 시각 (초)
     const buyBtn = isMine
       ? `<div style="text-align:center;font-size:12px;color:var(--gold);margin-top:8px">내가 올린 거래입니다</div>
@@ -1876,7 +1875,6 @@ function renderMarket() {
         <span style="color:var(--usdt);font-weight:700">${it.usdt.toFixed(1)} USDT</span>
       </div>
       <div style="font-size:13px;color:var(--text2);margin-top:6px">1 MPC ≈ ${unitKrw.toLocaleString()}원 · 총 ${totalKrw.toLocaleString()}원</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px">판매자: ${sellerShort}</div>
       ${buyBtn}
     </div>`;
   }).join('') + pager;
