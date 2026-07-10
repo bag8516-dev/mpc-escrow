@@ -708,6 +708,7 @@ const ESCROW_ABI = [
   'function getRemainingTime(bytes32 tradeId) view returns (uint256)',
   'event TradeCommitted(bytes32 indexed tradeId, address indexed seller, bytes32 commitHash)',
   'event TradeRevealed(bytes32 indexed tradeId, address indexed seller, uint256 mpcAmount, uint256 usdtAmount, uint256 krwPerUsdt)',
+  'event BuyerJoined(bytes32 indexed tradeId, address indexed buyer)',
   'event TradeCompleted(bytes32 indexed tradeId, address indexed seller, address indexed buyer)',
   'event TradeCancelled(bytes32 indexed tradeId, address indexed initiator)',
   'event TradeExpired(bytes32 indexed tradeId)',
@@ -1640,58 +1641,68 @@ async function recoverTradesFromChain() {
   }
 }
 
-// ── 장터 이벤트 조회 (3단계 자동 전환) ────────────────────────────────────
-// 무료 RPC마다 이벤트 조회 허용 범위가 달라서, 빠른 방법부터 순서대로 시도:
-// ① 전체(62,000블록) 한 번에 → ② 10,000블록씩 → ③ 250블록씩 (비상용)
-async function fetchMarketEvents() {
-  const LOOKBACK = 62000; // 24시간 = 57,600블록 (실측 블록타임 1.5초) + 여유분
-
-  // 전략별 조회 함수
+// ── 장터 로그 조회 (범위·이벤트 필터 지정, 3단계 자동 전환) ──────────────
+// 필터하는 이벤트 종류가 적을수록 RPC 응답이 빠름 (실측: 1종 7초 / 5종 20초 / 무필터 43초)
+async function fetchMarketLogs(fromBlock, toBlock, topics) {
+  const filter = { address: CONFIG.ESCROW_PROXY, topics: [topics] };
   const strategies = [
-    async (lc, latest) => { // ① 5조각 동시 조회 (가장 빠름)
-      const start = Math.max(0, latest - LOOKBACK);
-      const step = Math.ceil(LOOKBACK / 5);
+    async (lp) => { // ① 5조각 동시 조회 (가장 빠름)
+      const step = Math.max(1, Math.ceil((toBlock - fromBlock + 1) / 5));
       const ranges = [];
-      for (let from = start; from <= latest; from += step) ranges.push([from, Math.min(from + step - 1, latest)]);
-      const results = await Promise.all(ranges.map(([f, t]) => lc.queryFilter(lc.filters.TradeRevealed(), f, t)));
+      for (let f = fromBlock; f <= toBlock; f += step) ranges.push([f, Math.min(f + step - 1, toBlock)]);
+      const results = await Promise.all(ranges.map(([f, t]) =>
+        lp.getLogs({ ...filter, fromBlock: f, toBlock: t })));
       const out = [];
       results.forEach(a => out.push(...a));
       return out;
     },
-    async (lc, latest) => { // ② 10,000블록씩 순차
-      const start = Math.max(0, latest - LOOKBACK);
+    async (lp) => { // ② 9,500블록씩 순차
       const out = [];
-      for (let from = start; from <= latest; from += 10000) {
-        out.push(...await lc.queryFilter(lc.filters.TradeRevealed(), from, Math.min(from + 9999, latest)));
+      for (let f = fromBlock; f <= toBlock; f += 9500) {
+        out.push(...await lp.getLogs({ ...filter, fromBlock: f, toBlock: Math.min(f + 9499, toBlock) }));
       }
       return out;
     },
-    async (lc, latest) => { // ③ 250블록씩 8개 동시 (비상용)
-      const start = Math.max(0, latest - LOOKBACK);
+    async (lp) => { // ③ 250블록씩 8개 동시 (비상용)
       const ranges = [];
-      for (let from = start; from <= latest; from += 250) ranges.push([from, Math.min(from + 249, latest)]);
+      for (let f = fromBlock; f <= toBlock; f += 250) ranges.push([f, Math.min(f + 249, toBlock)]);
       const out = [];
       for (let i = 0; i < ranges.length; i += 8) {
         const results = await Promise.all(ranges.slice(i, i + 8).map(([f, t]) =>
-          lc.queryFilter(lc.filters.TradeRevealed(), f, t)
-        ));
+          lp.getLogs({ ...filter, fromBlock: f, toBlock: t })));
         results.forEach(a => out.push(...a));
       }
       return out;
     },
   ];
-
   for (const strategy of strategies) {
     for (const url of CONFIG.RPC_FALLBACKS) {
       try {
         const lp = new ethers.providers.JsonRpcProvider(url);
-        const lc = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, lp);
-        const latest = await lp.getBlockNumber();
-        return await strategy(lc, latest);
+        return await strategy(lp);
       } catch { /* 다음 RPC/전략 시도 */ }
     }
   }
   return null;
+}
+
+// ── 장터 캐시 ─────────────────────────────────────────────────────────────
+// 이벤트는 불변이므로 한 번 스캔한 구간은 저장 → 재방문 시 즉시 표시 + 새 블록만 스캔
+const MARKET_CACHE_KEY = 'market_cache_v1';
+function loadMarketCache() {
+  try { return JSON.parse(localStorage.getItem(MARKET_CACHE_KEY) || 'null') || { lastBlock: 0, items: {} }; }
+  catch { return { lastBlock: 0, items: {} }; }
+}
+function saveMarketCache(c) {
+  try { localStorage.setItem(MARKET_CACHE_KEY, JSON.stringify(c)); } catch {}
+}
+
+function marketItemsFromCache(cache) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  return Object.values(cache.items)
+    .filter(it => it.createdAt + CONFIG.TRADE_TIMEOUT > nowSec)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map(it => ({ ...it, remain: it.createdAt + CONFIG.TRADE_TIMEOUT - nowSec }));
 }
 
 // ── 장터 (매도 목록) ──────────────────────────────────────────────────────
@@ -1700,49 +1711,93 @@ async function loadMarket() {
   const btn = document.getElementById('btnMarketRefresh');
   if (!el) return;
   if (btn) btn.disabled = true;
-  el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)"><span class="spinner-sm"></span> 판매 목록을 불러오는 중...</div>';
+
+  const cache = loadMarketCache();
+
+  // 1) 캐시가 있으면 즉시 표시 (새 글은 뒤에서 조용히 갱신)
+  const cachedItems = marketItemsFromCache(cache);
+  if (cachedItems.length > 0) {
+    _marketItems = cachedItems;
+    _marketPage = 0;
+    renderMarket();
+    if (btn) btn.textContent = '⏳ 새 글 확인 중...';
+  } else {
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)"><span class="spinner-sm"></span> 판매 목록을 불러오는 중...<br><span style="font-size:12px">(최초 접속은 몇 초 걸릴 수 있습니다)</span></div>';
+  }
+
   try {
     const readP = await getReadProvider();
     if (!readP) throw new Error('network');
-    const c = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP);
+    const latest = await readP.getBlockNumber();
+    const LOOKBACK = 62000; // 24시간 = 57,600블록 (블록타임 1.5초) + 여유분
+    const lookStart = Math.max(0, latest - LOOKBACK);
 
-    // 거래는 생성 후 24시간 유효 → 최근 24시간치 블록 조회 (폴리곤 ~2초/블록 ≈ 43,200블록 + 여유분)
-    const events = await fetchMarketEvents();
-    if (events === null) throw new Error('이벤트 조회 실패');
+    // 2) 캐시 이후의 새 블록만 스캔 (오래 비웠으면 전체 재스캔)
+    let fromBlock = cache.lastBlock > 0 ? cache.lastBlock + 1 : lookStart;
+    if (fromBlock < lookStart) { cache.items = {}; fromBlock = lookStart; }
+    const isFullScan = fromBlock === lookStart;
 
-    const nowSec = Math.floor(Date.now() / 1000);
-    const ordered = events.reverse(); // 최신 거래부터
-    // 거래 상태를 5건씩 동시 조회 (순차 조회 대비 5배 빠름)
-    const states = new Array(ordered.length).fill(null);
-    for (let i = 0; i < ordered.length; i += 5) {
-      await Promise.all(ordered.slice(i, i + 5).map(async (ev, j) => {
-        try { states[i + j] = await c.getTrade(ev.args.tradeId); } catch {}
-      }));
+    if (fromBlock <= latest) {
+      // 전체 스캔은 판매 등록 이벤트 1종만 (빠름 — 상태는 아래에서 개별 확인)
+      // 델타 스캔은 범위가 작으므로 5종 전부 (팔림·취소·만료 즉시 반영)
+      const iface = new ethers.utils.Interface(ESCROW_ABI);
+      const topics = isFullScan
+        ? [iface.getEventTopic('TradeRevealed')]
+        : ['TradeRevealed', 'BuyerJoined', 'TradeCompleted', 'TradeCancelled', 'TradeExpired'].map(n => iface.getEventTopic(n));
+      const logs = await fetchMarketLogs(fromBlock, latest, topics);
+      if (logs === null) throw new Error('이벤트 조회 실패');
+
+      // 3) 이벤트 해석: 새 판매 글 추가 / 팔림·취소·만료된 글 제거
+      const newIds = [];
+      for (const log of logs) {
+        let p;
+        try { p = iface.parseLog(log); } catch { continue; }
+        if (p.name === 'TradeRevealed') newIds.push(p.args.tradeId);
+        else if (p.name === 'BuyerJoined' || p.name === 'TradeCompleted' || p.name === 'TradeCancelled' || p.name === 'TradeExpired') {
+          delete cache.items[p.args.tradeId];
+        }
+      }
+
+      // 4) 새 판매 글만 상태 확인 (보통 몇 건 안 됨 → 빠름)
+      if (newIds.length > 0) {
+        const c = new ethers.Contract(CONFIG.ESCROW_PROXY, ESCROW_ABI, readP);
+        for (let i = 0; i < newIds.length; i += 5) {
+          await Promise.all(newIds.slice(i, i + 5).map(async (id) => {
+            try {
+              const t = await c.getTrade(id);
+              if (Number(t.status) !== 2) return; // 구매 가능(PENDING)만
+              cache.items[id] = {
+                tradeId: id,
+                seller:  t.seller,
+                mpcAmt:  parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18)),
+                usdt:    parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6)),
+                krw:     Number(t.krwPerUsdt),
+                createdAt: Number(t.createdAt),
+              };
+            } catch { /* 개별 조회 실패는 건너뜀 */ }
+          }));
+        }
+      }
+
+      // 5) 만료된 글 정리 후 저장
+      const nowSec = Math.floor(Date.now() / 1000);
+      for (const id of Object.keys(cache.items)) {
+        if (cache.items[id].createdAt + CONFIG.TRADE_TIMEOUT <= nowSec) delete cache.items[id];
+      }
+      cache.lastBlock = latest;
+      saveMarketCache(cache);
     }
-    const items = [];
-    for (let i = 0; i < ordered.length; i++) {
-      const t = states[i];
-      if (!t) continue;
-      if (Number(t.status) !== 2) continue; // PENDING(구매 가능)만 표시
-      const remain = Number(t.createdAt) + CONFIG.TRADE_TIMEOUT - nowSec;
-      if (remain <= 0) continue;
-      items.push({
-        tradeId: ordered[i].args.tradeId,
-        seller:  t.seller,
-        mpcAmt:  parseFloat(ethers.utils.formatUnits(t.mpcAmount, 18)),
-        usdt:    parseFloat(ethers.utils.formatUnits(t.usdtAmount, 6)),
-        krw:     Number(t.krwPerUsdt),
-        remain,
-      });
-    }
 
-    _marketItems = items;
+    _marketItems = marketItemsFromCache(cache);
     _marketPage = 0;
     renderMarket();
   } catch (e) {
-    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">목록을 불러오지 못했습니다.<br>잠시 후 새로고침을 눌러주세요.</div>';
+    // 캐시 표시라도 있으면 유지, 아무것도 없을 때만 실패 안내
+    if (cachedItems.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">목록을 불러오지 못했습니다.<br>잠시 후 새로고침을 눌러주세요.</div>';
+    }
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 새로고침'; }
   }
 }
 
