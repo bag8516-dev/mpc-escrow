@@ -810,11 +810,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 function detectEnvironment() {
   const ua = navigator.userAgent;
   const banner = document.getElementById('envBanner');
-  if (/KAKAOTALK|kakaotalk/i.test(ua)) {
-    banner.textContent = '⚠️ 카카오톡 앱 내 브라우저에서는 지갑 연결이 불가합니다. 크롬 또는 삼성 인터넷으로 열어주세요.';
+  if (/KAKAOTALK/i.test(ua)) {
+    banner.textContent = '⚠️ 카카오톡 브라우저에서는 장터 구경만 가능합니다. 거래하려면 메뉴(⋯)에서 "Safari로 열기" 또는 "다른 브라우저로 열기"를 눌러주세요.';
     banner.classList.add('show');
   } else if (/NAVER/i.test(ua)) {
-    banner.textContent = '⚠️ 네이버 앱 내 브라우저에서는 지갑 연결이 불가합니다. 크롬 또는 삼성 인터넷으로 열어주세요.';
+    banner.textContent = '⚠️ 네이버 브라우저에서는 장터 구경만 가능합니다. 거래하려면 다른 브라우저로 열어주세요.';
     banner.classList.add('show');
   }
 }
@@ -855,7 +855,17 @@ async function connectWallet() {
       onWalletConnected();
       return;
     }
-    // 일반 브라우저 (크롬/삼성인터넷 등): WalletConnect로 Trust Wallet 앱 연동
+    // 카카오톡/네이버 등 인앱 브라우저: 앱 전환이 불안정해 연결을 막고 외부 브라우저 안내
+    if (isInAppBrowser()) {
+      resetButton(btn, '🔗 지갑 연결하기');
+      showError(`📌 <strong>카카오톡 브라우저에서는 지갑 연결이 불안정합니다.</strong><br><br>
+        화면의 메뉴(<strong>⋯</strong>)에서<br>
+        <strong>"Safari로 열기"</strong> 또는 <strong>"다른 브라우저로 열기"</strong>를 누른 뒤<br>
+        다시 연결해주세요.<br><br>
+        <span style="color:var(--text3);font-size:13px">장터 구경은 여기서도 가능합니다.</span>`);
+      return;
+    }
+    // 일반 브라우저 (크롬/삼성인터넷/사파리 등): WalletConnect로 Trust Wallet 앱 연동
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
     if (isMobile || location.search.indexOf('wc=1') !== -1) {
       await connectViaWalletConnect(btn);
