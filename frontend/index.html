@@ -238,6 +238,26 @@ a { color:var(--gold); text-decoration:none; }
 <!-- 앱 내 브라우저 감지 배너 -->
 <div class="env-banner" id="envBanner"></div>
 
+<!-- ─── 점검 모드 (MAINTENANCE=true 배포 시 전체 차단) ──────── -->
+<div id="maintenanceOverlay" style="display:none;position:fixed;inset:0;background:var(--navy);z-index:9999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 24px;gap:16px">
+  <div style="font-size:52px">🛠</div>
+  <div style="font-size:20px;font-weight:800">시스템 업데이트 중입니다</div>
+  <div style="color:var(--text2);font-size:15px;line-height:1.8">
+    더 편리한 이용을 위해 기능을 업데이트하고 있습니다.<br>
+    잠시 후 다시 이용해주세요.<br><br>
+    <strong style="color:var(--gold)">진행 중인 거래와 예치된 자산은<br>블록체인에 안전하게 보관되어 있습니다.</strong>
+  </div>
+  <div style="font-size:13px;color:var(--text3);margin-top:8px">문의: 카카오 채널</div>
+</div>
+<script>
+var MAINTENANCE = false; // true로 배포하면 점검 모드
+if (MAINTENANCE) {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('maintenanceOverlay').style.display = 'flex';
+  });
+}
+</script>
+
 <div id="app">
 
   <!-- ─── 지갑 연결 화면 ────────────────────────────────────── -->
