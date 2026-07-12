@@ -1032,6 +1032,8 @@ function onWalletConnected() {
     showBuyerPage(currentTradeId);
   } else {
     showTab('market');
+    // 등록하다 중단된 판매가 있으면 이어하기 제안 (구매 링크로 들어온 경우는 방해하지 않음)
+    maybeOfferResume();
   }
 
   // 거래 목록 갱신
@@ -1208,6 +1210,97 @@ function calcSell() {
   if (btn) btn.disabled = false;
 }
 
+// ── 판매 등록 이어하기 (중단 복구) ────────────────────────────────────────
+// 등록 진행 상황을 폰에 저장해두고, 서명 도중 중단되면 다음 접속 때 이어서 진행
+const REG_DRAFT_KEY = 'mpc_reg_draft';
+function saveRegDraft(d) { try { localStorage.setItem(REG_DRAFT_KEY, JSON.stringify(d)); } catch {} }
+function loadRegDraft() { try { return JSON.parse(localStorage.getItem(REG_DRAFT_KEY) || 'null'); } catch { return null; } }
+function clearRegDraft() { try { localStorage.removeItem(REG_DRAFT_KEY); } catch {} }
+
+async function maybeOfferResume() {
+  const d = loadRegDraft();
+  if (!d || !walletAddress) return;
+  if ((d.wallet || '').toLowerCase() !== walletAddress.toLowerCase()) return; // 다른 지갑이면 그 지갑용으로 보관
+  if (Date.now() - d.savedAt > 48 * 3600 * 1000) { clearRegDraft(); return; } // 48시간 지나면 폐기
+
+  // 예약(commit)까지 된 경우: 체인에서 아직 예약 상태인지 확인
+  if (d.step === 'committed') {
+    const t = await fetchTrade(d.tradeId);
+    if (!t || Number(t.status) !== 1) { clearRegDraft(); return; } // 이미 완료됐거나 무효
+  }
+
+  const ok = await showConfirm(
+    '📋 이어서 등록하시겠습니까?',
+    `등록하다 중단된 판매가 있습니다.<br><br>
+     <strong>${Number(d.mpcAmt).toLocaleString()} MPC · 1개당 ${Number(d.pricePerMpc).toLocaleString()}원</strong><br><br>
+     이어서 진행하면 이미 완료한 서명은 건너뜁니다.`
+  );
+  if (!ok) { clearRegDraft(); return; }
+
+  if (d.step === 'committed') {
+    await resumeReveal(d);
+  } else {
+    // 서명 전/승인 단계에서 중단: 입력값 복원 → 생성 버튼만 누르면 됨 (승인은 자동 건너뜀)
+    document.getElementById('sellMpcAmount').value = d.mpcAmt;
+    document.getElementById('sellPricePerMpc').value = d.pricePerMpc;
+    document.getElementById('sellKrwPerUsdt').value = d.krwPerUsdt;
+    showTab('sell');
+    calcSell();
+    showToast('✅ 입력값을 복원했습니다. [거래 생성하기]를 눌러주세요', 5000);
+  }
+}
+
+// 예약까지 완료된 거래의 예치(마지막 서명)만 이어서 진행
+async function resumeReveal(d) {
+  const btn = document.getElementById('btnCreateTrade');
+  showTab('sell');
+  try {
+    setButtonLoading(btn, '이어하기 진행 중...');
+    const mpcWei   = ethers.BigNumber.from(d.mpcWei);
+    const priceWei = ethers.BigNumber.from(d.priceWei);
+    const krwInt   = ethers.BigNumber.from(d.krwInt);
+
+    // 승인이 소진됐으면 다시 승인 (드문 경우)
+    const alw = await readAllowance(CONFIG.MPC_TOKEN, walletAddress);
+    if (alw.lt(mpcWei)) {
+      await showSignGuide(
+        'MPC 사용 허락',
+        `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>"허용"</strong> 요청이 표시됩니다</div></div>
+         <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">이어하기를 위해 승인이 다시 필요합니다</div></div>`,
+        1, 2
+      );
+      await approveMpc(mpcWei);
+    }
+
+    await showSignGuide(
+      'MPC 에스크로 예치 (이어하기)',
+      `<div class="guide-step"><div class="guide-num">1</div><div class="guide-text">Trust Wallet에서 <strong>MPC 전송</strong> 요청이 표시됩니다</div></div>
+       <div class="guide-step"><div class="guide-num">2</div><div class="guide-text"><strong>${Number(d.mpcAmt).toLocaleString()} MPC</strong>가 에스크로에 안전하게 맡겨집니다</div></div>
+       <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">이 서명이 끝나면 장터에 등록됩니다</div></div>`,
+      2, 2
+    );
+    await callRevealAndDeposit(d.tradeId, mpcWei, priceWei, krwInt, d.secret);
+    clearRegDraft();
+
+    const usdtCeil = Math.ceil(Number(d.mpcAmt) * Number(d.priceWei) / 1e5) / 10;
+    saveTrade(d.tradeId, {
+      tradeId: d.tradeId, seller: walletAddress,
+      mpcAmt: Number(d.mpcAmt), pricePerMpc: Number(d.pricePerMpc),
+      usdtCeil, krwPerUsdt: Number(d.krwPerUsdt),
+      createdAt: Date.now(), status: 'PENDING', secret: d.secret,
+    });
+
+    const pageUrl = `${location.origin}${location.pathname}?t=${d.tradeId}`;
+    document.getElementById('shareUrl').textContent = pageUrl;
+    document.getElementById('modalShareLink').classList.add('show');
+    resetButton(btn, '거래 생성하기');
+    loadUserTrades();
+  } catch (err) {
+    resetButton(btn, '거래 생성하기');
+    showError(parseError(err)); // 실패해도 임시저장은 유지 → 다음에 다시 이어하기 제안
+  }
+}
+
 // ── 거래 생성 플로우 ──────────────────────────────────────────────────────
 async function createTradeFlow() {
   if (!requireWallet()) return;
@@ -1281,6 +1374,9 @@ async function createTradeFlow() {
   const addrOk = await showAddrConfirm(walletAddress);
   if (!addrOk) return;
 
+  // 이어하기용 임시저장 (서명 도중 중단되면 다음 접속 때 복구 제안)
+  saveRegDraft({ wallet: walletAddress, mpcAmt, pricePerMpc, krwPerUsdt, step: 'started', savedAt: Date.now() });
+
   const btn = document.getElementById('btnCreateTrade');
   setButtonLoading(btn, '처리 중...');
   showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
@@ -1313,6 +1409,12 @@ async function createTradeFlow() {
 
     const tradeId = await callCommitTrade(commitHash);
 
+    // 예약 완료 시점 저장 — 여기서 중단돼도 마지막 서명만 이어서 하면 됨
+    saveRegDraft({
+      wallet: walletAddress, mpcAmt, pricePerMpc, krwPerUsdt, step: 'committed', savedAt: Date.now(),
+      tradeId, secret: secretHex, mpcWei: mpcWei.toString(), priceWei: priceWei.toString(), krwInt: krwInt.toString(),
+    });
+
     // 6. 서명 2: revealAndDeposit
     await showSignGuide(
       'MPC 에스크로 예치',
@@ -1323,6 +1425,7 @@ async function createTradeFlow() {
     );
 
     await callRevealAndDeposit(tradeId, mpcWei, priceWei, krwInt, secretHex);
+    clearRegDraft(); // 등록 완료 — 이어하기 임시저장 제거
 
     // 7. 체인에서 거래 존재 확인 (잘못된 링크 방지) — 최대 3회 재시도
     let verifyTrade = null;
