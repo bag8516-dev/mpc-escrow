@@ -389,12 +389,12 @@ function installApp() {
       </div>
 
       <div class="input-group">
-        <label class="input-label">1 USDT = 원화 (직접 입력)</label>
-        <div class="input-wrap">
-          <input type="number" id="sellKrwPerUsdt" placeholder="" step="10" min="10" oninput="calcSell()">
+        <label class="input-label">1 USDT = 원화 (실시간 자동 적용)</label>
+        <div class="input-wrap" style="opacity:.75">
+          <input type="number" id="sellKrwPerUsdt" placeholder="조회 중..." readonly>
           <span class="input-unit">원</span>
         </div>
-        <div id="hintKrw" style="font-size:11px;color:var(--text3);margin-top:4px">10원 단위로 입력 (예: 1460, 1470...)</div>
+        <div id="hintKrw" style="font-size:11px;color:var(--text3);margin-top:4px">실시간 거래소 환율이 자동 적용됩니다 (조작 방지)</div>
       </div>
 
       <!-- 계산 결과 -->
@@ -1116,6 +1116,7 @@ async function fetchLiveRate() {
       liveKrwRate = await fetcher();
       if (el) el.textContent = `${liveKrwRate.toLocaleString()}원`;
       if (upd) upd.innerHTML = '5분마다 업데이트';
+      syncAutoRate(); // 판매 화면 환율 자동 반영 (조작 방지 — 직접 입력 불가)
       calcSell();
       updateBuyLiveRate();
       return;
@@ -1123,6 +1124,12 @@ async function fetchLiveRate() {
   }
   if (el) el.textContent = '환율 정보를 불러올 수 없습니다';
   if (upd) upd.innerHTML = '업데이트 실패';
+}
+
+// 판매 화면 환율 필드에 실시간 환율 자동 입력 (10원 단위 반올림)
+function syncAutoRate() {
+  const el = document.getElementById('sellKrwPerUsdt');
+  if (el && liveKrwRate) el.value = Math.round(liveKrwRate / 10) * 10;
 }
 
 function updateBuyLiveRate() {
@@ -1250,7 +1257,7 @@ async function maybeOfferResume() {
     // 서명 전/승인 단계에서 중단: 입력값 복원 → 생성 버튼만 누르면 됨 (승인은 자동 건너뜀)
     document.getElementById('sellMpcAmount').value = d.mpcAmt;
     document.getElementById('sellPricePerMpc').value = d.pricePerMpc;
-    document.getElementById('sellKrwPerUsdt').value = d.krwPerUsdt;
+    syncAutoRate(); // 환율은 항상 실시간 자동
     showTab('sell');
     calcSell();
     showToast('✅ 입력값을 복원했습니다. [거래 생성하기]를 눌러주세요', 5000);
@@ -1313,7 +1320,10 @@ async function createTradeFlow() {
   if (!requireWallet()) return;
   const mpcAmt      = parseFloat(document.getElementById('sellMpcAmount').value);
   const pricePerMpc = parseFloat(document.getElementById('sellPricePerMpc').value);
-  const krwPerUsdt  = parseFloat(document.getElementById('sellKrwPerUsdt').value);
+  // 환율은 실시간 값을 강제 적용 (화면 값·조작과 무관)
+  if (!liveKrwRate) { showError('❌ 실시간 환율을 불러오지 못했습니다.<br>잠시 후 다시 시도해주세요.'); return; }
+  const krwPerUsdt  = Math.round(liveKrwRate / 10) * 10;
+  syncAutoRate();
 
   if (!mpcAmt || !pricePerMpc || !krwPerUsdt) { showToast('모든 항목을 입력해주세요'); return; }
   if (mpcAmt <= 0)       { showError('MPC 수량은 0보다 커야 합니다.'); return; }
@@ -1535,7 +1545,7 @@ async function showBuyerPage(tradeId) {
     // 실질 단가 = USDT 단가 × 실시간 환율 (판매자가 입력한 환율 조작과 무관하게 판정)
     const policyRate = liveKrwRate || Number(trade.krwPerUsdt);
     const effectiveUnit = mpcAmt > 0 ? (usdt / mpcAmt) * policyRate : 0;
-    if (effectiveUnit < CONFIG.MIN_PRICE * 0.98) {
+    if (effectiveUnit < CONFIG.MIN_PRICE * 0.90) {
       document.getElementById('pageBuy').classList.remove('active');
       document.getElementById('pageExpired').style.display = 'flex';
       document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래 기준에 맞지 않는 거래입니다';
@@ -1604,7 +1614,7 @@ async function buyDepositFlow() {
       const _mpc = Number(trade.mpcAmount) / 1e18;
       const _usdt = Number(trade.usdtAmount) / 1e6;
       const _rate = liveKrwRate || Number(trade.krwPerUsdt);
-      if (_mpc > 0 && (_usdt / _mpc) * _rate < CONFIG.MIN_PRICE * 0.98) {
+      if (_mpc > 0 && (_usdt / _mpc) * _rate < CONFIG.MIN_PRICE * 0.90) {
         resetButton(btn, 'USDT 예치하고 구매하기');
         showError(`❌ 이 거래는 최소 거래 가격(1MPC당 ${CONFIG.MIN_PRICE}원) 기준에 미달하여 진행할 수 없습니다.`);
         return;
@@ -1859,7 +1869,7 @@ function marketItemsFromCache(cache) {
     .filter(it => {
       const rate = liveKrwRate || it.krw;
       const unitKrw = it.mpcAmt > 0 ? (it.usdt / it.mpcAmt) * rate : 0;
-      return unitKrw >= CONFIG.MIN_PRICE * 0.98; // 환율 미세 변동 여유 2%
+      return unitKrw >= CONFIG.MIN_PRICE * 0.90; // 환율 변동 여유 10% (정상 글 오차단 방지)
     })
     .sort((a, b) => b.createdAt - a.createdAt)
     .map(it => ({ ...it, remain: it.createdAt + CONFIG.TRADE_TIMEOUT - nowSec }));
@@ -2185,7 +2195,7 @@ async function editPriceById(tradeId) {
     if (t) {
       document.getElementById('sellMpcAmount').value = t.mpcAmt || '';
       if (t.pricePerMpc) document.getElementById('sellPricePerMpc').value = Math.max(CONFIG.MIN_PRICE, Math.round(t.pricePerMpc / 50) * 50);
-      if (t.krwPerUsdt)  document.getElementById('sellKrwPerUsdt').value = t.krwPerUsdt;
+      syncAutoRate(); // 환율은 항상 실시간 자동
     }
     showTab('sell');
     calcSell();
