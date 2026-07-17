@@ -382,10 +382,10 @@ function installApp() {
       <div class="input-group">
         <label class="input-label">MPC 1개당 원화 가격</label>
         <div class="input-wrap">
-          <input type="number" id="sellPricePerMpc" placeholder="0" step="50" min="100" oninput="calcSell()">
+          <input type="number" id="sellPricePerMpc" placeholder="0" step="50" min="500" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
-        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">최소 100원, 50원 단위 (예: 100, 150, 200...)</div>
+        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">최소 500원, 50원 단위 (예: 500, 550, 600...)</div>
       </div>
 
       <div class="input-group">
@@ -690,6 +690,8 @@ const CONFIG = {
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MIN_MPC:       100,
   MAX_MPC:       100000,
+  MIN_PRICE:     500,    // MPC 1개당 최소 원화 가격 (2026-07-14 정책: 500원)
+  RATE_TOLERANCE: 0.10,  // 환율 입력 허용 오차 (실시간 환율 대비 ±10%) — 가짜 환율로 최소가 우회 방지
   TRADE_TIMEOUT: 86400,  // 24시간 (초) — 컨트랙트 TRADE_TIMEOUT과 반드시 일치해야 함
   RATE_INTERVAL: 300000, // 5분 (ms)
 };
@@ -1145,8 +1147,8 @@ function calcSell() {
     el.style.color = warn ? 'var(--danger)' : 'var(--text3)';
   };
   setHint('hintMpcAmt', '최소 100 ~ 최대 100,000 MPC', false);
-  setHint('hintPrice', '최소 100원, 50원 단위 (예: 100, 150, 200...)', false);
-  setHint('hintKrw', '10원 단위로 입력 (예: 1460, 1470...)', false);
+  setHint('hintPrice', '최소 500원, 50원 단위 (예: 500, 550, 600...)', false);
+  setHint('hintKrw', '10원 단위, 실시간 환율 ±10% 이내', false);
 
   if (mpcAmt <= 0 || pricePerMpc <= 0 || krwPerUsdt <= 0) {
     if (box) box.style.display = 'none';
@@ -1162,11 +1164,16 @@ function calcSell() {
     setHint('hintMpcAmt', `⚠️ 최대 거래 한도는 ${CONFIG.MAX_MPC.toLocaleString()} MPC입니다`, true);
     invalid = true;
   }
-  if (pricePerMpc < 100) {
-    setHint('hintPrice', '⚠️ MPC 1개당 최소 가격은 100원입니다', true);
+  if (pricePerMpc < CONFIG.MIN_PRICE) {
+    setHint('hintPrice', `⚠️ MPC 1개당 최소 가격은 ${CONFIG.MIN_PRICE}원입니다`, true);
     invalid = true;
   } else if (pricePerMpc % 50 !== 0) {
-    setHint('hintPrice', '⚠️ 50원 단위로 입력해주세요 (예: 100, 150, 200...)', true);
+    setHint('hintPrice', '⚠️ 50원 단위로 입력해주세요 (예: 500, 550, 600...)', true);
+    invalid = true;
+  }
+  // 환율 조작으로 최소가를 우회하는 것 방지: 실시간 환율 ±10% 이내만 허용
+  if (liveKrwRate && Math.abs(krwPerUsdt - liveKrwRate) / liveKrwRate > CONFIG.RATE_TOLERANCE) {
+    setHint('hintKrw', `⚠️ 실시간 환율(${liveKrwRate.toLocaleString()}원) ±10% 이내로 입력해주세요`, true);
     invalid = true;
   }
   if (krwPerUsdt % 10 !== 0) {
@@ -1313,9 +1320,13 @@ async function createTradeFlow() {
   if (mpcAmt < CONFIG.MIN_MPC) { showError(`❌ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다.`); return; }
   if (pricePerMpc <= 0)  { showError('MPC 단가는 0보다 커야 합니다.'); return; }
   if (krwPerUsdt <= 0)   { showError('USDT 환율은 0보다 커야 합니다.'); return; }
-  if (pricePerMpc < 100) { showError('❌ MPC 1개당 최소 가격은 100원입니다.'); return; }
-  if (pricePerMpc % 50 !== 0) { showError('❌ MPC 단가는 50원 단위로 입력해주세요.<br>예: 100, 150, 200...'); return; }
+  if (pricePerMpc < CONFIG.MIN_PRICE) { showError(`❌ MPC 1개당 최소 가격은 ${CONFIG.MIN_PRICE}원입니다.`); return; }
+  if (pricePerMpc % 50 !== 0) { showError('❌ MPC 단가는 50원 단위로 입력해주세요.<br>예: 500, 550, 600...'); return; }
   if (krwPerUsdt % 10 !== 0)  { showError('❌ USDT 환율은 10원 단위로 입력해주세요.<br>예: 1460, 1470...'); return; }
+  if (liveKrwRate && Math.abs(krwPerUsdt - liveKrwRate) / liveKrwRate > CONFIG.RATE_TOLERANCE) {
+    showError(`❌ 환율은 실시간 환율(${liveKrwRate.toLocaleString()}원)의 ±10% 이내로만 입력할 수 있습니다.`);
+    return;
+  }
   if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
 
   // pricePerMpc는 원화 단가; 컨트랙트엔 USDT 단가 필요
@@ -1818,6 +1829,13 @@ function marketItemsFromCache(cache) {
   const nowSec = Math.floor(Date.now() / 1000);
   return Object.values(cache.items)
     .filter(it => it.createdAt + CONFIG.TRADE_TIMEOUT > nowSec)
+    // 최소가 정책(500원) 미만 글은 장터에 표시하지 않음
+    // 실질 단가 = USDT 단가 × 실시간 환율 (판매자가 입력한 환율 조작과 무관하게 판정)
+    .filter(it => {
+      const rate = liveKrwRate || it.krw;
+      const unitKrw = it.mpcAmt > 0 ? (it.usdt / it.mpcAmt) * rate : 0;
+      return unitKrw >= CONFIG.MIN_PRICE * 0.98; // 환율 미세 변동 여유 2%
+    })
     .sort((a, b) => b.createdAt - a.createdAt)
     .map(it => ({ ...it, remain: it.createdAt + CONFIG.TRADE_TIMEOUT - nowSec }));
 }
@@ -2141,7 +2159,7 @@ async function editPriceById(tradeId) {
     // 판매 화면으로 이동하며 기존 값 미리 채우기
     if (t) {
       document.getElementById('sellMpcAmount').value = t.mpcAmt || '';
-      if (t.pricePerMpc) document.getElementById('sellPricePerMpc').value = Math.max(100, Math.round(t.pricePerMpc / 50) * 50);
+      if (t.pricePerMpc) document.getElementById('sellPricePerMpc').value = Math.max(CONFIG.MIN_PRICE, Math.round(t.pricePerMpc / 50) * 50);
       if (t.krwPerUsdt)  document.getElementById('sellKrwPerUsdt').value = t.krwPerUsdt;
     }
     showTab('sell');
