@@ -1855,6 +1855,33 @@ async function fetchMarketLogs(fromBlock, toBlock, topics) {
   return null;
 }
 
+// ── 24시간 조회 범위 자동 계산 ────────────────────────────────────────────
+// 폴리곤 블록 생성 속도를 실측해서 "24시간어치 블록 수"를 동적으로 계산.
+// 고정값을 쓰면 체인 업그레이드로 블록 속도가 바뀔 때 조회 범위가 조용히 어긋남.
+// 실측값은 하루 동안 캐시 (매번 2회 추가 조회 방지)
+const BLOCKTIME_CACHE_KEY = 'polygon_blocktime_v1';
+async function calcLookbackBlocks(readP, latest) {
+  const FALLBACK = 62000; // 실측 실패 시 (블록타임 1.5초 가정 + 여유)
+  try {
+    const cached = JSON.parse(localStorage.getItem(BLOCKTIME_CACHE_KEY) || 'null');
+    let blockTime = null;
+    if (cached && Date.now() - cached.at < 24 * 3600 * 1000) {
+      blockTime = cached.bt;
+    } else {
+      const SAMPLE = 40000;
+      const [bNew, bOld] = await Promise.all([readP.getBlock(latest), readP.getBlock(latest - SAMPLE)]);
+      blockTime = (bNew.timestamp - bOld.timestamp) / SAMPLE;
+      if (blockTime > 0.3 && blockTime < 10) {
+        try { localStorage.setItem(BLOCKTIME_CACHE_KEY, JSON.stringify({ bt: blockTime, at: Date.now() })); } catch {}
+      }
+    }
+    if (blockTime > 0.3 && blockTime < 10) {
+      return Math.ceil(88200 / blockTime); // 24.5시간어치 (여유 30분 포함)
+    }
+  } catch { /* 실측 실패 시 고정값 사용 */ }
+  return FALLBACK;
+}
+
 // ── 장터 캐시 ─────────────────────────────────────────────────────────────
 // 이벤트는 불변이므로 한 번 스캔한 구간은 저장 → 재방문 시 즉시 표시 + 새 블록만 스캔
 const MARKET_CACHE_KEY = 'market_cache_v1';
@@ -1905,7 +1932,7 @@ async function loadMarket() {
     const readP = await getReadProvider();
     if (!readP) throw new Error('network');
     const latest = await readP.getBlockNumber();
-    const LOOKBACK = 62000; // 24시간 = 57,600블록 (블록타임 1.5초) + 여유분
+    const LOOKBACK = await calcLookbackBlocks(readP, latest);
     const lookStart = Math.max(0, latest - LOOKBACK);
 
     // 2) 캐시 이후의 새 블록만 스캔 (오래 비웠으면 전체 재스캔)
