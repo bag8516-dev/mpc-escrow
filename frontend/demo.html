@@ -192,7 +192,8 @@ input{outline:none;border:none;font-family:inherit;color:var(--text);background:
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-const wait = ms => new Promise(r => setTimeout(r, ms));
+const SPEED = 1.8; // 재생 속도 배율 (높을수록 천천히) — 시니어 시청자 기준
+const wait = ms => new Promise(r => setTimeout(r, ms * SPEED));
 function toast(msg, dur=2600){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), dur); }
 function badge(t){ const b=$('stepBadge'); b.textContent=t; b.style.display=t?'block':'none'; }
 function show(id){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); $(id).classList.add('active'); }
