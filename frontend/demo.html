@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MPC 에스크로 데모</title>
+<style>
+:root{--gold:#C9A84C;--gold-light:#E2C06A;--gold-dark:#A07830;--gold-glow:rgba(201,168,76,.28);--navy:#0A0F1E;--navy2:#0D1526;--navy3:#111D35;--card:#0F1A30;--card2:#152038;--border:#1E2E4A;--border-gold:rgba(201,168,76,.30);--text:#FFF;--text2:#B8C6D8;--text3:#5A7090;--success:#2ECC71;--danger:#E74C3C;--usdt:#26D0A0;--mpc:#C9A84C;--radius:16px;--radius-sm:10px;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--navy);color:var(--text);font-family:'Pretendard','-apple-system','맑은 고딕',sans-serif;font-size:15px;line-height:1.6}
+button{cursor:pointer;border:none;outline:none;font-family:inherit}
+input{outline:none;border:none;font-family:inherit;color:var(--text);background:transparent}
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:80px}
+.demo-banner{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#7A1F1F;color:#FFD9D9;text-align:center;font-size:12px;font-weight:700;padding:5px;z-index:999}
+.step-badge{position:fixed;top:28px;left:50%;transform:translateX(-50%);background:rgba(201,168,76,.95);color:#0A0F1E;font-size:13px;font-weight:800;padding:5px 16px;border-radius:20px;z-index:998;display:none;white-space:nowrap}
+.header{display:flex;align-items:center;justify-content:space-between;padding:44px 20px 12px;background:var(--navy2);border-bottom:1px solid var(--border-gold)}
+.logo{font-size:16px;font-weight:900}.logo .g{color:var(--gold)}
+.wallet-badge{background:var(--card2);border:1px solid var(--border-gold);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success)}
+.page{display:none;flex-direction:column;flex:1}.page.active{display:flex}
+.connect{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:100px 20px 40px;text-align:center;gap:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin:12px 16px 0}
+.card-title{font-size:11px;font-weight:700;color:var(--gold);margin-bottom:12px;text-transform:uppercase;letter-spacing:1.2px}
+.btn{width:100%;padding:15px;border-radius:var(--radius-sm);font-size:16px;font-weight:700}
+.btn-primary{background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#0A0F1E;box-shadow:0 4px 20px var(--gold-glow)}
+.btn-success{background:linear-gradient(135deg,#2ECC71,#1a8a4a);color:#fff}
+.btn-outline{background:transparent;border:1.5px solid var(--border-gold);color:var(--text2)}
+.btn-sm{padding:10px 14px;font-size:14px;width:auto}
+.input-group{margin-bottom:14px}.input-label{font-size:13px;color:var(--text2);margin-bottom:6px;display:block}
+.input-wrap{background:var(--navy3);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:8px}
+.input-wrap input{flex:1;font-size:16px;font-weight:600}.unit{font-size:13px;color:var(--gold);font-weight:600}
+.hint{font-size:11px;color:var(--text3);margin-top:4px}
+.rate-box{background:var(--navy3);border-radius:var(--radius-sm);padding:12px 14px;margin-top:6px}
+.rrow{display:flex;justify-content:space-between;padding:3px 0;font-size:14px}.rlabel{color:var(--text3)}.rval{font-weight:700}
+.tab-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--navy2);border-top:1px solid var(--border-gold);display:none;z-index:200}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 0 12px;gap:3px;font-size:11px;color:var(--text3)}
+.tab.active{color:var(--gold)}.ticon{font-size:20px;line-height:1}
+.item{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin:10px 16px 0}
+.item-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.badge{display:inline-flex;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(201,168,76,.12);color:var(--gold-light);border:1px solid rgba(201,168,76,.3)}
+.amounts{display:flex;gap:8px;font-weight:700}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:500}
+.modal-ov.show{display:flex}
+.modal{background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;max-width:480px}
+.mtitle{font-size:18px;font-weight:800;margin-bottom:14px}
+.gstep{display:flex;gap:10px;margin-bottom:12px;font-size:14px;color:var(--text2)}
+.gnum{width:22px;height:22px;border-radius:50%;background:var(--gold);color:#0A0F1E;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #fff3;border-top-color:#fff;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1E2E4A;border:1px solid var(--border-gold);border-radius:12px;padding:12px 18px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:90%}
+.toast.show{opacity:1}
+.timer{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin:12px 16px 0}
+.tfill{height:6px;background:var(--gold);border-radius:4px;width:97%}
+.ttrack{height:6px;background:var(--border);border-radius:4px;flex:1}
+.info{background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:var(--radius-sm);padding:12px;font-size:13px;color:var(--gold-light);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="demo-banner">🎬 데모 모드 — 실제 거래가 아닙니다</div>
+<div class="step-badge" id="stepBadge"></div>
+
+<div id="app">
+  <!-- 연결 화면 -->
+  <div id="pgConnect" class="page active">
+    <div class="connect">
+      <div>
+        <div style="font-size:34px;font-weight:900"><span class="g" style="color:var(--gold)">MPC</span> 에스크로</div>
+        <div style="width:120px;height:2px;background:var(--gold);margin:10px auto"></div>
+        <div style="font-size:12px;color:var(--text3);letter-spacing:2px">폴리곤 P2P · 스마트 컨트랙트</div>
+      </div>
+      <div style="font-size:15px;color:var(--text2)">안전한 MPC ↔ USDT P2P 거래<br>스마트 컨트랙트가 자산을 보증합니다</div>
+      <button class="btn btn-primary" id="btnConnect" style="max-width:320px" onclick="startDemo()">🔗 지갑 연결하기</button>
+      <button class="btn btn-outline" style="max-width:320px">🏪 장터 구경하기 (연결 없이)</button>
+      <button class="btn btn-outline" style="max-width:320px;border-color:var(--gold);color:var(--gold)">📲 홈 화면에 앱 설치</button>
+      <div style="font-size:12px;color:var(--text3)">모바일 전용 · Trust Wallet 앱이 설치되어 있어야 합니다</div>
+    </div>
+  </div>
+
+  <!-- 헤더 (연결 후) -->
+  <div class="header" id="mainHeader" style="display:none">
+    <div class="logo"><span class="g">MPC</span> 에스크로</div>
+    <div class="wallet-badge"><span class="dot"></span><span style="font-family:monospace"><span style="color:var(--gold)">0x9A1f</span>...F458</span></div>
+  </div>
+
+  <!-- 장터 -->
+  <div id="pgMarket" class="page">
+    <div style="padding:16px 16px 0;display:flex;justify-content:space-between;align-items:center">
+      <div class="card-title" style="margin:0">🏪 판매 중인 거래</div>
+      <button class="btn btn-outline btn-sm">🔄 새로고침</button>
+    </div>
+    <div style="padding:12px 16px 0"><button class="btn btn-primary" onclick="">➕ 내 MPC 판매 글 올리기</button></div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px">
+      <button class="btn btn-sm btn-outline" style="flex:1;border-color:var(--gold);color:var(--gold)">🕐 최신순</button>
+      <button class="btn btn-sm btn-outline" style="flex:1">💰 낮은 가격순</button>
+    </div>
+    <div id="marketList"></div>
+  </div>
+
+  <!-- 판매 -->
+  <div id="pgSell" class="page">
+    <div class="card">
+      <div class="card-title">📦 판매 설정</div>
+      <div class="input-group"><label class="input-label">MPC 수량</label>
+        <div class="input-wrap"><input value="10000" readonly><span class="unit">MPC</span></div>
+        <div class="hint">최소 100 ~ 최대 100,000 MPC</div></div>
+      <div class="input-group"><label class="input-label">MPC 1개당 원화 가격</label>
+        <div class="input-wrap"><input value="550" readonly><span class="unit">원</span></div>
+        <div class="hint">최소 500원, 50원 단위 (예: 500, 550, 600...)</div></div>
+      <div class="input-group"><label class="input-label">1 USDT = 원화</label>
+        <div class="input-wrap"><input value="1500" readonly><span class="unit">원</span></div>
+        <div class="hint">10원 단위, 실시간 환율 ±10% 이내</div></div>
+      <div class="rate-box">
+        <div class="rrow"><span class="rlabel">총 받을 USDT</span><span class="rval" style="color:var(--usdt)">3,666.7 USDT</span></div>
+        <div class="rrow"><span class="rlabel">총 원화 환산</span><span class="rval" style="color:#f4c542">5,500,000원</span></div>
+        <div class="rrow"><span class="rlabel">실시간 USDT/KRW</span><span class="rval" style="color:var(--success)">1,496원</span></div>
+      </div>
+      <div class="info">ℹ️ Approve → 예치 순서로 <b>총 2번 서명</b>이 필요합니다</div>
+    </div>
+    <div style="padding:16px 16px 0"><button class="btn btn-primary">거래 생성하기</button></div>
+  </div>
+
+  <!-- 구매 -->
+  <div id="pgBuy" class="page">
+    <div class="card">
+      <div class="card-title">🛒 거래 정보</div>
+      <div class="rrow"><span class="rlabel">판매 수량</span><span class="rval" style="color:var(--mpc)">5,000 MPC</span></div>
+      <div class="rrow"><span class="rlabel">1 MPC당</span><span class="rval">500원</span></div>
+      <div class="rrow"><span class="rlabel">총 USDT</span><span class="rval" style="color:var(--usdt)">1,666.7 USDT</span></div>
+      <div class="rrow"><span class="rlabel">총 원화 환산</span><span class="rval" style="color:#f4c542">2,500,000원</span></div>
+    </div>
+    <div class="timer"><span style="font-size:20px">⏱</span><div style="flex:1"><div style="font-size:13px;color:var(--text2)">거래 만료까지</div><div class="ttrack"><div class="tfill" id="tFill"></div></div></div><div style="font-weight:800;color:var(--gold)" id="tCount">23시간 12분</div></div>
+    <div style="padding:16px 16px 0" id="buyAction">
+      <div class="info" style="margin-bottom:10px">ℹ️ USDT 전송 시 <b>총 2번 서명</b>이 필요합니다</div>
+      <button class="btn btn-success">USDT 예치하고 구매하기</button>
+    </div>
+    <div style="padding:26px 16px;display:none;text-align:center" id="buyDone">
+      <div style="font-size:48px;margin-bottom:12px">🎉</div>
+      <div style="font-size:18px;font-weight:800;color:var(--success)">거래 완료!</div>
+      <div style="font-size:14px;color:var(--text2);margin-top:8px">MPC가 즉시 지갑으로 전송됐습니다</div>
+    </div>
+  </div>
+</div>
+
+<!-- 탭바 -->
+<div class="tab-bar" id="tabBar">
+  <div class="tab active" id="tbM"><span class="ticon">🏪</span><span>장터</span></div>
+  <div class="tab" id="tbS"><span class="ticon">💰</span><span>판매</span></div>
+  <div class="tab"><span class="ticon">📊</span><span>진행 중</span></div>
+  <div class="tab"><span class="ticon">📋</span><span>내역</span></div>
+</div>
+
+<!-- 모달: 내용 확인 -->
+<div class="modal-ov" id="mConfirm"><div class="modal">
+  <div class="mtitle">거래 내용 확인</div>
+  <div class="rrow"><span class="rlabel">MPC 수량</span><span class="rval" style="color:var(--mpc)">10,000 MPC</span></div>
+  <div class="rrow"><span class="rlabel">총 USDT</span><span class="rval" style="color:var(--usdt)">3,666.7 USDT</span></div>
+  <div class="rrow"><span class="rlabel">총 원화</span><span class="rval" style="color:#f4c542">5,500,000원</span></div>
+  <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-outline">취소</button><button class="btn btn-primary">확인</button></div>
+</div></div>
+
+<!-- 모달: 24시간 동의 -->
+<div class="modal-ov" id="mRisk"><div class="modal">
+  <div class="mtitle">⚠️ 판매 게시 전 확인</div>
+  <div style="font-size:14px;color:var(--text2);line-height:1.8">
+    <b>1.</b> 판매 글은 <b>24시간 동안 게시</b>되며 가격이 고정됩니다.<br><br>
+    <b>2.</b> 이 기간 중 <b>시세 변동으로 손해를 볼 수 있습니다.</b> (언제든 취소 가능)<br><br>
+    <b>3.</b> 24시간 후에는 <b>[만료 처리] 버튼을 눌러야 MPC가 반환</b>됩니다.
+  </div>
+  <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-outline">취소</button><button class="btn btn-primary">확인</button></div>
+</div></div>
+
+<!-- 모달: 서명 안내 -->
+<div class="modal-ov" id="mSign"><div class="modal">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <div class="mtitle" id="sTitle" style="margin:0">서명 안내</div>
+    <div style="font-size:13px;color:var(--gold);font-weight:700;background:rgba(201,168,76,.12);padding:3px 10px;border-radius:20px" id="sStep">1 / 2</div>
+  </div>
+  <div style="height:4px;background:var(--border);border-radius:4px;margin-bottom:14px"><div id="sProg" style="height:100%;background:var(--gold);border-radius:4px;width:50%"></div></div>
+  <div id="sBody"></div>
+  <button class="btn btn-primary" style="margin-top:14px">다음 단계로</button>
+</div></div>
+
+<!-- 모달: 처리 중 -->
+<div class="modal-ov" id="mProc"><div class="modal" style="text-align:center;padding:36px 20px">
+  <div class="spin" style="width:34px;height:34px;border-width:3px;margin:0 auto 14px;display:block"></div>
+  <div style="font-size:16px;font-weight:700" id="procText">블록체인에 기록 중...</div>
+  <div style="font-size:13px;color:var(--text3);margin-top:6px">앱을 끄지 말고 기다려주세요</div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function toast(msg, dur=2600){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), dur); }
+function badge(t){ const b=$('stepBadge'); b.textContent=t; b.style.display=t?'block':'none'; }
+function show(id){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); $(id).classList.add('active'); }
+function modal(id,on){ $(id).classList.toggle('show',on); }
+function marketItem(mpc,unit,usdt,krw,mine){ return `<div class="item">
+  <div class="item-h"><span class="badge">판매 중</span><span style="font-size:12px;color:var(--text3)">⏱ ${Math.floor(Math.random()*9+13)}시간 ${Math.floor(Math.random()*50+5)}분 남음</span></div>
+  <div class="amounts"><span style="color:var(--mpc)">${mpc} MPC</span><span style="color:var(--text3)">→</span><span style="color:var(--usdt)">${usdt} USDT</span></div>
+  <div style="font-size:13px;color:var(--text2);margin-top:6px">1 MPC ≈ ${unit}원 · 총 ${krw}원</div>
+  ${mine?'<div style="text-align:center;font-size:12px;color:var(--gold);margin-top:8px">내가 올린 거래입니다</div><button class="btn btn-sm btn-outline" style="margin-top:6px;width:100%">⚙️ 관리하기 (가격 수정 · 취소 · 링크 복사)</button>':'<button class="btn btn-sm btn-success" style="margin-top:10px;width:100%" '+(unit==='500'?'id="buyTarget"':'')+'>🛒 구매하기</button>'}
+</div>`; }
+
+function renderMarket(withMine){
+  $('marketList').innerHTML =
+    (withMine? marketItem('10,000','550','3,666.7','5,500,000',true):'')
+    + marketItem('5,000','500','1,666.7','2,500,000',false)
+    + marketItem('20,000','600','8,000.0','12,000,000',false)
+    + marketItem('3,000','550','1,100.0','1,650,000',false);
+}
+
+function sign(title, stepTxt, prog, lines){
+  $('sTitle').textContent = title;
+  $('sStep').textContent = stepTxt;
+  $('sProg').style.width = prog;
+  $('sBody').innerHTML = lines.map((l,i)=>`<div class="gstep"><div class="gnum">${i+1}</div><div>${l}</div></div>`).join('');
+  modal('mSign', true);
+}
+
+async function startDemo(){
+  const btn=$('btnConnect');
+  btn.innerHTML='<span class="spin"></span> Trust Wallet 연결 중...';
+  badge('① 지갑 연결 — Trust Wallet 자동 실행');
+  await wait(2200);
+  show('pgMarket'); $('mainHeader').style.display='flex'; $('tabBar').style.display='flex';
+  renderMarket(false);
+  toast('✅ Trust Wallet 연결 완료!');
+  badge('② 장터 — 판매 글 실시간 확인');
+  await wait(3500);
+
+  // 판매 등록
+  badge('③ 판매 등록 — 수량·가격 입력');
+  $('tbM').classList.remove('active'); $('tbS').classList.add('active');
+  show('pgSell');
+  await wait(3200);
+  modal('mConfirm', true); badge('④ 거래 내용 확인');
+  await wait(2600); modal('mConfirm', false);
+  modal('mRisk', true); badge('⑤ 24시간 게시 동의');
+  await wait(3400); modal('mRisk', false);
+  await wait(400);
+  sign('MPC 사용 허락','1 / 2','50%',['Trust Wallet에서 <b>"허용"</b> 요청이 표시됩니다','에스크로가 MPC를 보관할 수 있게 허락하는 단계 <b>(자산이 빠져나가지 않습니다)</b>']);
+  badge('⑥ 서명 1/2 — 사용 허락');
+  await wait(2600); modal('mSign', false);
+  $('procText').textContent='MPC 승인 처리 중...'; modal('mProc', true);
+  await wait(2000); modal('mProc', false);
+  sign('MPC 에스크로 예치','2 / 2','100%',['Trust Wallet에서 <b>MPC 전송</b> 요청이 표시됩니다','<b>10,000 MPC</b>가 에스크로에 안전하게 보관됩니다','구매자가 결제하면 즉시 자동 교환됩니다']);
+  badge('⑦ 서명 2/2 — 에스크로 예치');
+  await wait(2800); modal('mSign', false);
+  $('procText').textContent='블록체인에 기록 중...'; modal('mProc', true);
+  await wait(2400); modal('mProc', false);
+
+  // 장터에 게시됨
+  $('tbS').classList.remove('active'); $('tbM').classList.add('active');
+  show('pgMarket'); renderMarket(true);
+  toast('🎉 판매 글이 장터에 게시됐습니다!', 3200);
+  badge('⑧ 장터 게시 완료 — 24시간 유지');
+  await wait(4200);
+
+  // 구매자 관점
+  badge('⑨ 구매자 — 장터에서 골라서 구매');
+  const bt=$('buyTarget'); if(bt){ bt.style.boxShadow='0 0 0 3px var(--gold)'; }
+  await wait(2200);
+  show('pgBuy');
+  badge('⑩ 거래 내용 확인');
+  await wait(3000);
+  sign('USDT 사용 허락','1 / 2','50%',['Trust Wallet에서 <b>"허용"</b> 요청이 표시됩니다','에스크로가 USDT를 가져갈 수 있게 허락 <b>(아직 이동하지 않습니다)</b>']);
+  badge('⑪ 서명 1/2 — USDT 허락');
+  await wait(2600); modal('mSign', false);
+  $('procText').textContent='USDT 승인 처리 중...'; modal('mProc', true);
+  await wait(2000); modal('mProc', false);
+  sign('USDT 전송 및 MPC 수령','2 / 2','100%',['USDT가 에스크로로 전송되고','<b>MPC가 즉시 내 지갑으로</b> 들어옵니다']);
+  badge('⑫ 서명 2/2 — 동시 교환');
+  await wait(2600); modal('mSign', false);
+  $('procText').textContent='거래 완료 처리 중...'; modal('mProc', true);
+  await wait(2200); modal('mProc', false);
+  $('buyAction').style.display='none'; $('buyDone').style.display='block';
+  toast('🎉 거래가 완료됐습니다!', 4000);
+  badge('✅ 거래 완료 — 동시 자동 교환');
+  await wait(4000); badge('');
+}
+</script>
+</body>
+</html>
