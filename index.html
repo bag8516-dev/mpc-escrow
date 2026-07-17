@@ -1530,6 +1530,19 @@ async function showBuyerPage(tradeId) {
     // 정보 채우기
     const mpcAmt = Number(trade.mpcAmount) / 1e18;
     const usdt   = Number(trade.usdtAmount) / 1e6;
+
+    // 거래 기준(최소가) 검사 — 장터 숨김을 직접 링크로 우회하는 것 차단
+    // 실질 단가 = USDT 단가 × 실시간 환율 (판매자가 입력한 환율 조작과 무관하게 판정)
+    const policyRate = liveKrwRate || Number(trade.krwPerUsdt);
+    const effectiveUnit = mpcAmt > 0 ? (usdt / mpcAmt) * policyRate : 0;
+    if (effectiveUnit < CONFIG.MIN_PRICE * 0.98) {
+      document.getElementById('pageBuy').classList.remove('active');
+      document.getElementById('pageExpired').style.display = 'flex';
+      document.getElementById('pageExpired').querySelector('div:nth-child(2)').textContent = '거래 기준에 맞지 않는 거래입니다';
+      document.getElementById('pageExpired').querySelector('div:nth-child(3)').innerHTML =
+        `이 판매 글은 최소 거래 가격(1MPC당 ${CONFIG.MIN_PRICE}원) 기준에 미달하여<br>진행할 수 없습니다.<br>장터에서 다른 판매 글을 이용해주세요.`;
+      return;
+    }
     const unitP  = Number(trade.usdtPricePerMPC) / 1e6;
     const krw    = Number(trade.krwPerUsdt);
     const totalKrw = Math.round(usdt * krw);
@@ -1584,6 +1597,18 @@ async function buyDepositFlow() {
       resetButton(btn, 'USDT 예치하고 구매하기');
       showError('❌ 본인이 판매자인 거래는 구매할 수 없습니다.');
       return;
+    }
+
+    // 거래 기준(최소가) 이중 확인 — 화면 검사를 우회해도 실행 단계에서 차단
+    {
+      const _mpc = Number(trade.mpcAmount) / 1e18;
+      const _usdt = Number(trade.usdtAmount) / 1e6;
+      const _rate = liveKrwRate || Number(trade.krwPerUsdt);
+      if (_mpc > 0 && (_usdt / _mpc) * _rate < CONFIG.MIN_PRICE * 0.98) {
+        resetButton(btn, 'USDT 예치하고 구매하기');
+        showError(`❌ 이 거래는 최소 거래 가격(1MPC당 ${CONFIG.MIN_PRICE}원) 기준에 미달하여 진행할 수 없습니다.`);
+        return;
+      }
     }
 
     const usdtAmt = ethers.BigNumber.from(trade.usdtAmount);
