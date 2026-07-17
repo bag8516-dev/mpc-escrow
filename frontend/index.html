@@ -490,6 +490,12 @@ function installApp() {
       <button class="btn btn-sm btn-ghost" id="mktSortNew" onclick="setMarketSort('new')" style="flex:1;border:1px solid var(--gold)">🕐 최신순</button>
       <button class="btn btn-sm btn-ghost" id="mktSortPrice" onclick="setMarketSort('price')" style="flex:1;border:1px solid var(--border)">💰 낮은 가격순</button>
     </div>
+    <div style="padding:8px 16px 0;display:flex;gap:6px">
+      <button class="btn btn-sm btn-ghost" id="mktQtyAll" onclick="setMarketQty('all')" style="flex:1;border:1px solid var(--gold);font-size:13px">전체</button>
+      <button class="btn btn-sm btn-ghost" id="mktQtyLow" onclick="setMarketQty('low')" style="flex:1;border:1px solid var(--border);font-size:13px">1만 이하</button>
+      <button class="btn btn-sm btn-ghost" id="mktQtyMid" onclick="setMarketQty('mid')" style="flex:1;border:1px solid var(--border);font-size:13px">1만~5만</button>
+      <button class="btn btn-sm btn-ghost" id="mktQtyHigh" onclick="setMarketQty('high')" style="flex:1;border:1px solid var(--border);font-size:13px">5만 이상</button>
+    </div>
     <div id="marketList">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">불러오는 중...</div>
     </div>
@@ -1974,6 +1980,7 @@ async function loadMarket() {
 // ── 장터 정렬 + 렌더 ─────────────────────────────────────────────────────
 let _marketItems = [];
 let _marketSort = 'new'; // 'new' | 'price'
+let _marketQty = 'all'; // 'all' | 'low'(≤1만) | 'mid'(1만~5만) | 'high'(5만 초과)
 let _marketPage = 0;
 const MARKET_PAGE_SIZE = 5;
 let _marketCountdownInterval = null;
@@ -1986,6 +1993,26 @@ function setMarketSort(mode) {
   document.getElementById('mktSortNew').style.cssText = mode === 'new' ? on : off;
   document.getElementById('mktSortPrice').style.cssText = mode === 'price' ? on : off;
   renderMarket();
+}
+
+// 수량 구간 필터 (전체 / 1만 이하 / 1만~5만 / 5만 이상)
+function setMarketQty(mode) {
+  _marketQty = mode;
+  _marketPage = 0;
+  const on  = 'flex:1;border:1px solid var(--gold);font-size:13px;color:var(--gold)';
+  const off = 'flex:1;border:1px solid var(--border);font-size:13px';
+  document.getElementById('mktQtyAll').style.cssText  = mode === 'all'  ? on : off;
+  document.getElementById('mktQtyLow').style.cssText  = mode === 'low'  ? on : off;
+  document.getElementById('mktQtyMid').style.cssText  = mode === 'mid'  ? on : off;
+  document.getElementById('mktQtyHigh').style.cssText = mode === 'high' ? on : off;
+  renderMarket();
+}
+
+function matchQtyFilter(mpcAmt) {
+  if (_marketQty === 'low')  return mpcAmt <= 10000;
+  if (_marketQty === 'mid')  return mpcAmt > 10000 && mpcAmt <= 50000;
+  if (_marketQty === 'high') return mpcAmt > 50000;
+  return true; // all
 }
 
 function marketPageMove(dir) {
@@ -2005,12 +2032,18 @@ function renderMarket() {
     return;
   }
 
-  const items = [..._marketItems];
+  const items = _marketItems.filter(it => matchQtyFilter(it.mpcAmt));
   if (_marketSort === 'price') {
     // 1 MPC당 원화 가격 낮은 순
     items.sort((a, b) => (a.usdt * a.krw / a.mpcAmt) - (b.usdt * b.krw / b.mpcAmt));
   }
   // 'new'는 로드 시 최신순 그대로
+
+  // 필터 결과가 없을 때
+  if (items.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)">해당 수량대의 판매 글이 없습니다.<br>다른 구간을 선택해보세요.</div>';
+    return;
+  }
 
   // 페이지 계산 (5개씩)
   const totalPages = Math.ceil(items.length / MARKET_PAGE_SIZE);
