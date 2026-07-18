@@ -794,7 +794,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026071802';
+const APP_VERSION = '2026071803';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1820,7 +1820,9 @@ async function loadUserTrades() {
 
 async function recoverTradesFromChain() {
   try {
-    const allIds = await escrowContract.getUserTrades(walletAddress);
+    // 조회는 공용 RPC 우선 (지갑 노드 401 시 내역 복구가 조용히 실패하는 것 방지)
+    const rc = (await readEscrow()) || escrowContract;
+    const allIds = await rc.getUserTrades(walletAddress);
     if (!allIds || allIds.length === 0) return;
 
     // 최근 50건만 복구 (누적 시 성능 보호)
@@ -1834,7 +1836,7 @@ async function recoverTradesFromChain() {
       if (local[tradeId]) continue;
 
       // 체인에서 거래 정보 가져오기
-      const t = await escrowContract.getTrade(tradeId);
+      const t = await rc.getTrade(tradeId);
       const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
       const status = statusArr[Number(t.status)] || 'NONE';
       if (status === 'NONE' || status === 'COMMITTED') continue;
