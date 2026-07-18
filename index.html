@@ -2341,29 +2341,32 @@ function startStatusCountdown() {
 // ① 가스량·수수료를 공용 RPC로 미리 계산해 지갑 노드 의존 최소화 (지갑은 서명·전송만)
 // ② 401/일시 오류 시 자동 재시도 (2회, 간격 2초)
 // ③ 완료 확인(영수증 대기)도 공용 RPC로 수행
-async function buildTxOverrides(populatePromise) {
+async function buildTxOverrides(populatePromise, boost) {
   try {
     const readP = await getReadProvider();
     if (!readP || !walletAddress) return {};
     const txReq = await populatePromise;
-    const [est, fee] = await Promise.all([
+    // 네트워크에 실제 최소 팁을 직접 조회 (ethers 기본 추정치는 폴리곤 최소 25 Gwei보다 낮음)
+    const [est, fee, netTipHex] = await Promise.all([
       readP.estimateGas({ to: txReq.to, data: txReq.data, from: walletAddress }),
       readP.getFeeData(),
+      readP.send('eth_maxPriorityFeePerGas', []).catch(() => null),
     ]);
     const o = { gasLimit: est.mul(15).div(10) }; // 여유 50%
-    if (fee.maxFeePerGas && fee.maxPriorityFeePerGas) {
-      // 폴리곤 최소 팁 25 Gwei — ethers 기본값(1.5 Gwei)이 이보다 낮아 하한 35 Gwei 보장
+    const mul = 10 + 5 * (boost || 0); // 재시도마다 수수료 50%씩 인상
+    if (fee.maxFeePerGas) {
       const MIN_TIP = ethers.utils.parseUnits('35', 'gwei');
-      let tip = fee.maxPriorityFeePerGas.mul(2);
+      let tip = netTipHex ? ethers.BigNumber.from(netTipHex).mul(2) : MIN_TIP;
       if (tip.lt(MIN_TIP)) tip = MIN_TIP;
+      tip = tip.mul(mul).div(10);
       o.maxPriorityFeePerGas = tip;
-      let maxFee = fee.maxFeePerGas.mul(2);
+      let maxFee = fee.maxFeePerGas.mul(2).mul(mul).div(10);
       const floor = tip.mul(2);
       if (maxFee.lt(floor)) maxFee = floor;
       o.maxFeePerGas = maxFee;
     } else if (fee.gasPrice) {
       const MIN_GP = ethers.utils.parseUnits('40', 'gwei');
-      let gp = fee.gasPrice.mul(15).div(10);
+      let gp = fee.gasPrice.mul(15).div(10).mul(mul).div(10);
       if (gp.lt(MIN_GP)) gp = MIN_GP;
       o.gasPrice = gp;
     }
@@ -2371,21 +2374,9 @@ async function buildTxOverrides(populatePromise) {
   } catch { return {}; } // 계산 실패 시 지갑에 맡김 (기존 동작)
 }
 
-async function sendWithRetry(makeTx) {
-  let lastErr;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try { return await makeTx(); }
-    catch (e) {
-      lastErr = e;
-      const msg = String(e?.message || e);
-      // 사용자 거부는 재시도하지 않음
-      if (e?.code === 4001 || /reject|denied|cancel/i.test(msg)) throw e;
-      // 지갑 노드 일시 오류(401/403/429/internal)만 재시도
-      if (!/401|403|429|internal|timeout|network/i.test(msg)) throw e;
-      await sleep(2000);
-    }
-  }
-  throw lastErr;
+function isUserReject(e) {
+  const msg = String(e?.message || e);
+  return e?.code === 4001 || /user (rejected|denied|cancel)|rejected by user|denied transaction/i.test(msg);
 }
 
 // 완료 확인은 공용 RPC로 (지갑 노드 의존 제거)
@@ -2397,12 +2388,25 @@ async function waitForReceipt(tx) {
   return tx.wait();
 }
 
-// 요청을 먼저 보낸 뒤 Trust Wallet 앱을 전면으로 (WalletConnect 사용 시)
+// 전송 파이프라인: 1차 계산값 → 실패 시 수수료 인상 재시도 → 최종 지갑 기본값 (사용자 거부만 즉시 중단)
 async function sendAndWait(contract, method, args) {
-  const overrides = await buildTxOverrides(contract.populateTransaction[method](...args));
   nudgeWalletApp();
-  const tx = await sendWithRetry(() => contract[method](...args, overrides));
-  return waitForReceipt(tx);
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      // 0·1·2차: 공용 RPC 계산값(재시도마다 수수료 50% 인상), 3차(최후): 지갑 기본 방식
+      const overrides = attempt < 3
+        ? await buildTxOverrides(contract.populateTransaction[method](...args), attempt)
+        : {};
+      const tx = await contract[method](...args, overrides);
+      return await waitForReceipt(tx);
+    } catch (e) {
+      lastErr = e;
+      if (isUserReject(e)) throw e; // 사용자가 직접 거부한 경우만 즉시 중단
+      await sleep(1500);
+    }
+  }
+  throw lastErr;
 }
 
 async function approveMpc(amount) {
