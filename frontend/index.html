@@ -1357,6 +1357,14 @@ async function createTradeFlow() {
   const usdtCeil = Math.ceil(mpcAmt * priceWeiConfirm / 1e5) / 10;
   const totalKrw = Math.round(mpcAmt * pricePerMpc);
 
+  // 잔액·승인 조회를 미리 병렬로 시작 — 사용자가 아래 팝업들을 읽는 동안 완료됨 (대기 단축)
+  const preload = Promise.all([
+    checkPolBalance(),
+    readTokenBalance(CONFIG.MPC_TOKEN, walletAddress),
+    readAllowance(CONFIG.MPC_TOKEN, walletAddress),
+  ]);
+  preload.catch(() => {}); // 팝업 단계에서 취소해도 조용히 정리
+
   // 1. 수량 확인 팝업
   const confirmed = await showConfirm(
     '거래 내용 확인',
@@ -1381,12 +1389,13 @@ async function createTradeFlow() {
   );
   if (!riskOk) return;
 
-  // 2. POL·MPC 잔액 확인 (조회 실패도 안내창으로 처리)
+  // 2. POL·MPC 잔액 확인 (미리 시작한 병렬 조회 결과 사용)
+  let preAllowance = null;
   try {
-    const hasGas = await checkPolBalance();
+    const [hasGas, mpcBalance, allowanceRes] = await preload;
+    preAllowance = allowanceRes;
     if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
 
-    const mpcBalance = await readTokenBalance(CONFIG.MPC_TOKEN, walletAddress);
     const mpcNeeded = bigIntMpc(mpcAmt);
     if (mpcBalance.lt(mpcNeeded)) {
       const have = parseFloat(ethers.utils.formatUnits(mpcBalance, 18)).toFixed(2);
@@ -1412,7 +1421,7 @@ async function createTradeFlow() {
   try {
     // 4. 서명 1: Approve MPC (이전 승인이 남아있으면 건너뛰어 왕복 절약)
     const mpcAmountWei = bigIntMpc(mpcAmt);
-    const mpcAllowance = await readAllowance(CONFIG.MPC_TOKEN, walletAddress);
+    const mpcAllowance = preAllowance !== null ? preAllowance : await readAllowance(CONFIG.MPC_TOKEN, walletAddress);
     if (mpcAllowance.lt(mpcAmountWei)) {
       await showSignGuide(
         'MPC 사용 허락',
@@ -2341,17 +2350,34 @@ function startStatusCountdown() {
 // ① 가스량·수수료를 공용 RPC로 미리 계산해 지갑 노드 의존 최소화 (지갑은 서명·전송만)
 // ② 401/일시 오류 시 자동 재시도 (2회, 간격 2초)
 // ③ 완료 확인(영수증 대기)도 공용 RPC로 수행
+// 수수료 정보 30초 캐시 — 서명이 연달아 2~3번일 때 매번 재조회하지 않음
+let _feeCache = { at: 0, fee: null, tip: null };
+async function getFeeInfo(readP) {
+  if (_feeCache.fee && Date.now() - _feeCache.at < 30000) return _feeCache;
+  const [fee, tip] = await Promise.all([
+    readP.getFeeData(),
+    readP.send('eth_maxPriorityFeePerGas', []).catch(() => null),
+  ]);
+  _feeCache = { at: Date.now(), fee, tip };
+  return _feeCache;
+}
+
 async function buildTxOverrides(populatePromise, boost) {
+  // 계산이 6초를 넘으면 기다리지 않고 지갑 기본 방식으로 진행 (속도 우선)
+  const inner = _buildTxOverridesInner(populatePromise, boost);
+  return Promise.race([inner, sleep(6000).then(() => ({}))]).catch(() => ({}));
+}
+async function _buildTxOverridesInner(populatePromise, boost) {
   try {
     const readP = await getReadProvider();
     if (!readP || !walletAddress) return {};
     const txReq = await populatePromise;
     // 네트워크에 실제 최소 팁을 직접 조회 (ethers 기본 추정치는 폴리곤 최소 25 Gwei보다 낮음)
-    const [est, fee, netTipHex] = await Promise.all([
+    const [est, feeInfo] = await Promise.all([
       readP.estimateGas({ to: txReq.to, data: txReq.data, from: walletAddress }),
-      readP.getFeeData(),
-      readP.send('eth_maxPriorityFeePerGas', []).catch(() => null),
+      getFeeInfo(readP),
     ]);
+    const fee = feeInfo.fee, netTipHex = feeInfo.tip;
     const o = { gasLimit: est.mul(15).div(10) }; // 여유 50%
     const mul = 10 + 5 * (boost || 0); // 재시도마다 수수료 50%씩 인상
     if (fee.maxFeePerGas) {
