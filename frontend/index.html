@@ -1598,10 +1598,14 @@ async function buyDepositFlow() {
   if (!requireWallet()) return;
   if (!currentTradeId) { showError('거래 ID가 없습니다'); return; }
 
-  try {
-    const hasGas = await checkPolBalance();
-    if (!hasGas) { document.getElementById('modalPolLow').classList.add('show'); return; }
-  } catch (err) { showError(parseError(err)); return; }
+  // 조회 4건을 미리 병렬로 시작 — 주소 확인 팝업을 읽는 동안 완료됨 (대기 단축)
+  const preload = Promise.all([
+    checkPolBalance(),
+    fetchTrade(currentTradeId),
+    readTokenBalance(CONFIG.USDT_TOKEN, walletAddress),
+    readAllowance(CONFIG.USDT_TOKEN, walletAddress),
+  ]);
+  preload.catch(() => {}); // 팝업 단계에서 취소해도 조용히 정리
 
   const addrOk = await showAddrConfirm(walletAddress);
   if (!addrOk) return;
@@ -1611,7 +1615,12 @@ async function buyDepositFlow() {
   showToast('⏳ 처리 중입니다. 폴리곤 네트워크가 느릴 수 있으니 앱을 끄지 말고 기다려주세요.', 7000);
 
   try {
-    const trade = await fetchTrade(currentTradeId);
+    const [hasGas, trade, usdtBalance, usdtAllowance] = await preload;
+    if (!hasGas) {
+      resetButton(btn, 'USDT 예치하고 구매하기');
+      document.getElementById('modalPolLow').classList.add('show');
+      return;
+    }
     if (!trade || Number(trade.status) === 0) {
       resetButton(btn, 'USDT 예치하고 구매하기');
       showError('거래 정보를 불러올 수 없습니다. 잠시 후 다시 시도하거나 판매자에게 문의하세요.');
@@ -1639,8 +1648,7 @@ async function buyDepositFlow() {
 
     const usdtAmt = ethers.BigNumber.from(trade.usdtAmount);
 
-    // USDT 잔액 확인
-    const usdtBalance = await readTokenBalance(CONFIG.USDT_TOKEN, walletAddress);
+    // USDT 잔액 확인 (미리 시작한 병렬 조회 결과 사용)
     if (usdtBalance.lt(usdtAmt)) {
       resetButton(btn, 'USDT 예치하고 구매하기');
       const need = (Number(usdtAmt) / 1e6).toFixed(1);
@@ -1649,8 +1657,7 @@ async function buyDepositFlow() {
       return;
     }
 
-    // 서명 1: Approve USDT (이전 승인이 남아있으면 건너뛰어 왕복 절약)
-    const usdtAllowance = await readAllowance(CONFIG.USDT_TOKEN, walletAddress);
+    // 서명 1: Approve USDT (이전 승인이 남아있으면 건너뛰어 왕복 절약 — 병렬 조회 결과 사용)
     if (usdtAllowance.lt(usdtAmt)) {
       await showSignGuide(
         'USDT 사용 허락',
@@ -2405,12 +2412,12 @@ function isUserReject(e) {
   return e?.code === 4001 || /user (rejected|denied|cancel)|rejected by user|denied transaction/i.test(msg);
 }
 
-// 완료 확인은 공용 RPC로 (지갑 노드 의존 제거)
+// 완료 확인은 공용 RPC로 (지갑 노드 의존 제거) — 3분 시간제한, 초과 시 지갑 경유
 async function waitForReceipt(tx) {
   try {
     const readP = await getReadProvider();
-    if (readP) return await readP.waitForTransaction(tx.hash);
-  } catch { /* 공용 RPC 실패 시 지갑 경유 */ }
+    if (readP) return await readP.waitForTransaction(tx.hash, 1, 180000);
+  } catch { /* 공용 RPC 실패·시간초과 시 지갑 경유 */ }
   return tx.wait();
 }
 
@@ -2553,40 +2560,45 @@ async function getRemainingTime(tradeId) {
     return r.toNumber();
   } catch { return 0; }
 }
+// 공용 RPC 조회 공통 루틴 — 실패하면 다른 공용 RPC로 교체해 1회 더 시도
+// (지갑 노드 폴백보다 먼저 — 지갑 노드 401이 사용자에게 노출되는 것 방지)
+async function readCall(fn) {
+  for (let i = 0; i < 2; i++) {
+    try {
+      const readP = await getReadProvider();
+      if (readP) return await fn(readP);
+    } catch { resetReadProvider(); }
+  }
+  return null;
+}
+
 async function checkPolBalance() {
   if (!walletAddress) return true;
-  // 조회는 공용 RPC로 (WalletConnect 경유 조회는 불안정할 수 있음)
+  const min = ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString());
+  const bal = await readCall(p => p.getBalance(walletAddress));
+  if (bal !== null) return bal.gt(min);
   try {
-    const readP = await getReadProvider();
-    if (readP) {
-      const bal = await readP.getBalance(walletAddress);
-      return bal.gt(ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString()));
-    }
-  } catch { /* 아래 지갑 경유로 재시도 */ }
-  try {
-    const bal = await window.__ethersProvider.getBalance(walletAddress);
-    return bal.gt(ethers.utils.parseEther(CONFIG.MIN_POL_GAS.toString()));
+    const b = await window.__ethersProvider.getBalance(walletAddress);
+    return b.gt(min);
   } catch { return true; } // 조회 실패 시 차단하지 않음 (가스 부족이면 어차피 서명 단계에서 안내됨)
 }
 
-// 토큰 잔액 조회 (공용 RPC 우선, 실패 시 지갑 경유)
+// 토큰 잔액 조회 (공용 RPC 2회 → 지갑 경유 → 실패 시 0 반환해 잔액부족 안내로 유도하지 않고 오류 방지)
 async function readTokenBalance(tokenAddr, owner) {
   const abi = ['function balanceOf(address) view returns (uint256)'];
+  const bal = await readCall(p => new ethers.Contract(tokenAddr, abi, p).balanceOf(owner));
+  if (bal !== null) return bal;
   try {
-    const readP = await getReadProvider();
-    if (readP) return await new ethers.Contract(tokenAddr, abi, readP).balanceOf(owner);
-  } catch { /* 지갑 경유 재시도 */ }
-  const c = tokenAddr === CONFIG.MPC_TOKEN ? mpcContract : usdtContract;
-  return await c.balanceOf(owner);
+    const c = tokenAddr === CONFIG.MPC_TOKEN ? mpcContract : usdtContract;
+    return await c.balanceOf(owner);
+  } catch (e) { throw new Error('잔액 조회에 실패했습니다. 잠시 후 다시 시도해주세요.'); }
 }
 
 // 기존 승인(Allowance) 조회 — 남은 승인이 충분하면 승인 서명을 건너뛰어 왕복 1회 절약
 async function readAllowance(tokenAddr, owner) {
   const abi = ['function allowance(address,address) view returns (uint256)'];
-  try {
-    const readP = await getReadProvider();
-    if (readP) return await new ethers.Contract(tokenAddr, abi, readP).allowance(owner, CONFIG.ESCROW_PROXY);
-  } catch { /* 지갑 경유 재시도 */ }
+  const al = await readCall(p => new ethers.Contract(tokenAddr, abi, p).allowance(owner, CONFIG.ESCROW_PROXY));
+  if (al !== null) return al;
   try {
     const c = tokenAddr === CONFIG.MPC_TOKEN ? mpcContract : usdtContract;
     return await c.allowance(owner, CONFIG.ESCROW_PROXY);
@@ -2749,6 +2761,14 @@ function parseError(err) {
     msg.toLowerCase().includes('cancelled by user')
   ) {
     return '✋ 서명을 취소했습니다. 거래를 다시 진행하려면 버튼을 다시 눌러주세요.';
+  }
+
+  // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내
+  if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
+    return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>반복되면 카카오 문의를 이용해주세요.';
+  }
+  if (/below minimum|underpriced|tip cap/i.test(msg)) {
+    return '❌ 네트워크 수수료 기준이 일시적으로 높아졌습니다. 잠시 후 다시 시도해주세요.';
   }
 
   const map = {
