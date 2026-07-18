@@ -131,7 +131,10 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
 
     <!-- 전체 거래 현황 (최근 24시간) -->
     <div class="card">
-      <div class="card-title">📈 전체 거래 현황 (배포 이후 전체)</div>
+      <div class="card-title">📈 전체 거래 현황</div>
+      <div class="input-wrap" style="margin-bottom:12px">
+        <input type="text" id="admSearch" placeholder="🔍 지갑 주소 또는 거래 ID 검색 (4자 이상)" oninput="setAdminSearch(this.value)" style="font-size:14px">
+      </div>
       <div id="tradeStats"></div>
       <div id="tradeList" style="margin-top:12px;"><div class="empty-state">조회 중...</div></div>
       <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadTrades()">🔄 새로고침</button>
@@ -467,69 +470,114 @@ async function loadTrades() {
     cache.lastBlock = scanned.latest;
     saveScanCache(cache);
 
-    // 3. 모든 거래의 현재 상태를 체인에서 확인 (5개씩 병렬)
+    // 3. 거래 상태 확인 — 이미 종결(완료·취소·만료)로 저장된 건은 재조회 생략 (상태 불변)
+    //    → 거래가 수천 건 쌓여도 조회량이 늘지 않음
     listEl.innerHTML = '<div class="empty-state">거래 상태 확인 중...</div>';
     const rp = await getReadProvider();
     if (!rp) throw new Error('rpc');
     const c = new ethers.Contract(ADMIN_CONFIG.ESCROW_PROXY, ESCROW_VIEW_ABI, rp);
-    const ids = Object.keys(cache.trades);
-    const states = {};
-    for (let i = 0; i < ids.length; i += 5) {
-      await Promise.all(ids.slice(i, i + 5).map(async id => {
-        try { states[id] = await c.getTrade(id); } catch {}
+    const TERMINAL = [4, 5, 6];
+    const idsToCheck = Object.keys(cache.trades).filter(id => !TERMINAL.includes(cache.trades[id].status));
+    for (let i = 0; i < idsToCheck.length; i += 5) {
+      await Promise.all(idsToCheck.slice(i, i + 5).map(async id => {
+        try {
+          const t = await c.getTrade(id);
+          const it = cache.trades[id];
+          it.status    = Number(t.status);
+          it.createdAt = Number(t.createdAt);
+          it.seller    = t.seller;
+          it.buyer     = t.buyer !== '0x0000000000000000000000000000000000000000' ? t.buyer : null;
+        } catch { /* 개별 실패 건너뜀 */ }
       }));
     }
+    saveScanCache(cache);
 
-    // 4. 렌더링
-    const nowSec = Math.floor(Date.now() / 1000);
-    const statusMap = { 2:'판매 중', 3:'진행 중', 4:'완료', 5:'취소', 6:'만료' };
-    const colorMap  = { 2:'var(--gold)', 3:'var(--warning)', 4:'var(--success)', 5:'var(--danger)', 6:'var(--text3)' };
-    const counts = { 2:0, 4:0, 5:0, 6:0 };
-    let pendingMpcSum = 0;
-    const items = [];
-
-    for (const id of ids) {
-      const t = states[id];
-      if (!t) continue;
-      const st = Number(t.status);
-      if (!statusMap[st]) continue;
-      if (counts[st] !== undefined) counts[st]++;
-      const cached = cache.trades[id];
-      const createdAt = Number(t.createdAt);
-      const remain = createdAt + 86400 - nowSec;
-      if (st === 2 && remain > 0) pendingMpcSum += cached.mpcAmt;
-      items.push({ id, st, remain, createdAt, cached, buyer: t.buyer, seller: t.seller });
-    }
-    items.sort((a, b) => b.createdAt - a.createdAt); // 최신순
-
-    const rows = items.map(({ id, st, remain, createdAt, cached, buyer, seller }) => {
-      const label = (st === 2 && remain <= 0) ? '만료 대기 (반환 필요)' : statusMap[st];
-      const buyerStr = buyer !== '0x0000000000000000000000000000000000000000' ? shortAddr(buyer) : '—';
-      const timeStr = new Date(createdAt * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
-      return `
-        <div class="tx-item">
-          <div class="tx-header">
-            <div style="font-size:13px;font-weight:700;color:${colorMap[st]}">${label}${st === 2 && remain > 0 ? ' · ' + fmtRemainAdmin(remain) + ' 남음' : ''}</div>
-            <div class="tx-id">${timeStr}</div>
-          </div>
-          <div class="tx-detail">
-            <strong>${cached.mpcAmt.toLocaleString()} MPC</strong> → <strong>${cached.usdt.toFixed(1)} USDT</strong><br>
-            판매자 ${shortAddr(seller)} · 구매자 ${buyerStr}
-          </div>
-          ${st === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${id}', this)">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
-        </div>`;
-    });
-
-    statsEl.innerHTML = `
-      <div class="stat-row"><div class="stat-label">판매 중 (예치 잠금)</div><div class="stat-val">${counts[2]}건 · ${pendingMpcSum.toLocaleString()} MPC</div></div>
-      <div class="stat-row"><div class="stat-label">완료</div><div class="stat-val" style="color:var(--success)">${counts[4]}건</div></div>
-      <div class="stat-row"><div class="stat-label">취소 / 만료</div><div class="stat-val" style="color:var(--text3)">${counts[5]}건 / ${counts[6]}건</div></div>`;
-
-    listEl.innerHTML = rows.length > 0 ? rows.join('') : '<div class="empty-state">거래 내역이 없습니다</div>';
+    renderAdminTrades(cache);
   } catch {
     statsEl.innerHTML = '';
     listEl.innerHTML = '<div class="empty-state">조회 실패 — 새로고침을 눌러주세요</div>';
   }
+}
+
+// ── 거래 현황 렌더링 (검색 + 미종결 무제한 + 종결 30일) ──────────────────
+let _admSearch = '';
+function setAdminSearch(v) {
+  _admSearch = (v || '').trim().toLowerCase();
+  const cache = loadScanCache();
+  renderAdminTrades(cache);
+}
+
+function renderAdminTrades(cache) {
+  const listEl = document.getElementById('tradeList');
+  const statsEl = document.getElementById('tradeStats');
+  const nowSec = Math.floor(Date.now() / 1000);
+  const statusMap = { 2:'판매 중', 3:'진행 중', 4:'완료', 5:'취소', 6:'만료' };
+  const colorMap  = { 2:'var(--gold)', 3:'var(--warning)', 4:'var(--success)', 5:'var(--danger)', 6:'var(--text3)' };
+
+  const all = Object.entries(cache.trades)
+    .map(([id, it]) => ({ id, ...it }))
+    .filter(it => statusMap[it.status]);
+
+  // 통계 (전체 기간 누적)
+  const counts = { 2:0, 4:0, 5:0, 6:0 };
+  let pendingMpcSum = 0;
+  for (const it of all) {
+    if (counts[it.status] !== undefined) counts[it.status]++;
+    if (it.status === 2) pendingMpcSum += it.mpcAmt;
+  }
+  statsEl.innerHTML = `
+    <div class="stat-row"><div class="stat-label">판매 중 (예치 잠금)</div><div class="stat-val">${counts[2]}건 · ${pendingMpcSum.toLocaleString()} MPC</div></div>
+    <div class="stat-row"><div class="stat-label">완료 (누적)</div><div class="stat-val" style="color:var(--success)">${counts[4]}건</div></div>
+    <div class="stat-row"><div class="stat-label">취소 / 만료 (누적)</div><div class="stat-val" style="color:var(--text3)">${counts[5]}건 / ${counts[6]}건</div></div>`;
+
+  const row = (it) => {
+    const remain = (it.createdAt || 0) + 86400 - nowSec;
+    const label = (it.status === 2 && remain <= 0) ? '만료 대기 (반환 필요)' : statusMap[it.status];
+    const timeStr = it.createdAt ? new Date(it.createdAt * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    return `
+      <div class="tx-item">
+        <div class="tx-header">
+          <div style="font-size:13px;font-weight:700;color:${colorMap[it.status]}">${label}${it.status === 2 && remain > 0 ? ' · ' + fmtRemainAdmin(remain) + ' 남음' : ''}</div>
+          <div class="tx-id">${timeStr}</div>
+        </div>
+        <div class="tx-detail">
+          <strong>${it.mpcAmt.toLocaleString()} MPC</strong> → <strong>${it.usdt.toFixed(1)} USDT</strong><br>
+          판매자 ${shortAddr(it.seller)} · 구매자 ${it.buyer ? shortAddr(it.buyer) : '—'}<br>
+          <span style="font-size:11px;color:var(--text3);font-family:monospace">${it.id.slice(0, 20)}...</span>
+        </div>
+        ${it.status === 2 && remain <= 0 ? `<button class="btn btn-danger btn-sm" onclick="adminExpire('${it.id}', this)">⏰ 만료 처리 (판매자에게 MPC 반환)</button>` : ''}
+      </div>`;
+  };
+
+  // 검색 모드: 전체 기간에서 지갑 주소·거래 ID로 검색 (사고 조사용)
+  if (_admSearch.length >= 4) {
+    const hits = all.filter(it =>
+      it.id.toLowerCase().includes(_admSearch) ||
+      (it.seller || '').toLowerCase().includes(_admSearch) ||
+      (it.buyer || '').toLowerCase().includes(_admSearch)
+    ).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--gold);margin-bottom:8px">검색 결과 ${hits.length}건 (전체 기간)</div>`
+      + (hits.length ? hits.map(row).join('') : '<div class="empty-state">일치하는 거래가 없습니다</div>');
+    return;
+  }
+
+  // 기본 모드: 미종결은 기간 무제한 전부 + 종결은 최근 30일만
+  const open = all.filter(it => it.status === 2).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const cutoff = nowSec - 30 * 86400;
+  const settledRecent = all.filter(it => it.status !== 2 && (it.createdAt || 0) >= cutoff)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const settledOld = all.filter(it => it.status !== 2 && (it.createdAt || 0) < cutoff);
+
+  let html = '';
+  html += `<div style="font-size:12px;font-weight:700;color:var(--gold);margin:4px 0 6px">● 미종결 거래 ${open.length}건 (기간 무관 전체 표시)</div>`;
+  html += open.length ? open.map(row).join('') : '<div class="empty-state" style="padding:14px 0">미종결 거래 없음</div>';
+  html += `<div style="font-size:12px;font-weight:700;color:var(--text3);margin:16px 0 6px">● 종결 거래 — 최근 30일 ${settledRecent.length}건</div>`;
+  html += settledRecent.length ? settledRecent.map(row).join('') : '<div class="empty-state" style="padding:14px 0">최근 30일 종결 거래 없음</div>';
+  if (settledOld.length > 0) {
+    const oldMpc = settledOld.reduce((s, it) => s + it.mpcAmt, 0);
+    html += `<div style="font-size:12px;color:var(--text3);margin-top:14px;padding:10px;background:var(--card2);border-radius:8px">30일 이전 종결 거래 ${settledOld.length}건 · ${oldMpc.toLocaleString()} MPC — 목록 생략 (위 검색으로 조회 가능)</div>`;
+  }
+  listEl.innerHTML = html;
 }
 
 // ── 만료 처리 (누구나 호출 가능, MPC는 원래 판매자에게 반환됨) ──────────
