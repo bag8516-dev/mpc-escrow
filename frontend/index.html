@@ -794,7 +794,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026071801';
+const APP_VERSION = '2026071802';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -941,8 +941,7 @@ async function connectWallet() {
     showToast('보안을 위해 모바일에서만 이용 가능합니다');
   } catch (err) {
     resetButton(btn, '🔗 지갑 연결하기');
-    showToast('오류: ' + (err.message || String(err)));
-    showError(parseError(err));
+    showError(parseError(err)); // 원문 노출 금지 — 반드시 번역된 안내만 표시
   }
 }
 
@@ -1021,29 +1020,42 @@ function nudgeWalletApp() {
 
 async function ensurePolygonNetwork() {
   if (!window.__ethersProvider) return;
-  const network = await window.__ethersProvider.getNetwork();
-  if (network.chainId !== CONFIG.CHAIN_ID) {
-    try {
+  const hexId = '0x' + CONFIG.CHAIN_ID.toString(16);
+  // 주의: 체인 확인(getNetwork)은 지갑 노드를 거치므로 노드 401에 취약.
+  // 확인 없이 바로 전환을 요청한다 — 이미 폴리곤이면 지갑이 조용히 무시(no-op)함.
+  try {
+    await window.__ethersProvider.provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: hexId }],
+    });
+    window.__ethersProvider = new ethers.providers.Web3Provider(window.__ethersProvider.provider);
+    window.__ethersSigner = window.__ethersProvider.getSigner();
+    return;
+  } catch (switchErr) {
+    if (switchErr.code === 4902) {
       await window.__ethersProvider.provider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x' + CONFIG.CHAIN_ID.toString(16) }],
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: hexId,
+          chainName: CONFIG.CHAIN_NAME,
+          nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+          rpcUrls: [CONFIG.RPC_URL],
+          blockExplorerUrls: [CONFIG.EXPLORER],
+        }],
       });
       window.__ethersProvider = new ethers.providers.Web3Provider(window.__ethersProvider.provider);
       window.__ethersSigner = window.__ethersProvider.getSigner();
-    } catch (switchErr) {
-      if (switchErr.code === 4902) {
-        await window.__ethersProvider.provider.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x' + CONFIG.CHAIN_ID.toString(16),
-            chainName: CONFIG.CHAIN_NAME,
-            nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-            rpcUrls: [CONFIG.RPC_URL],
-            blockExplorerUrls: [CONFIG.EXPLORER],
-          }],
-        });
-      } else throw switchErr;
+      return;
     }
+    // 전환 요청 실패 (지갑 노드 오류 등) — 현재 체인이 이미 폴리곤인지 3회 확인
+    for (let i = 0; i < 3; i++) {
+      try {
+        const network = await window.__ethersProvider.getNetwork();
+        if (network.chainId === CONFIG.CHAIN_ID) return; // 이미 폴리곤이면 통과
+        break; // 다른 체인이 확실하면 즉시 안내로
+      } catch { await sleep(1500); }
+    }
+    throw new Error('지갑 네트워크를 폴리곤(Polygon)으로 확인하지 못했습니다.<br><br>Trust Wallet 브라우저 화면 상단에서 네트워크를 <strong>Polygon</strong>으로 직접 선택한 뒤 다시 연결해주세요.');
   }
 }
 
