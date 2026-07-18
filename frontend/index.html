@@ -2352,10 +2352,20 @@ async function buildTxOverrides(populatePromise) {
     ]);
     const o = { gasLimit: est.mul(15).div(10) }; // 여유 50%
     if (fee.maxFeePerGas && fee.maxPriorityFeePerGas) {
-      o.maxFeePerGas = fee.maxFeePerGas.mul(2);
-      o.maxPriorityFeePerGas = fee.maxPriorityFeePerGas.mul(2);
+      // 폴리곤 최소 팁 25 Gwei — ethers 기본값(1.5 Gwei)이 이보다 낮아 하한 35 Gwei 보장
+      const MIN_TIP = ethers.utils.parseUnits('35', 'gwei');
+      let tip = fee.maxPriorityFeePerGas.mul(2);
+      if (tip.lt(MIN_TIP)) tip = MIN_TIP;
+      o.maxPriorityFeePerGas = tip;
+      let maxFee = fee.maxFeePerGas.mul(2);
+      const floor = tip.mul(2);
+      if (maxFee.lt(floor)) maxFee = floor;
+      o.maxFeePerGas = maxFee;
     } else if (fee.gasPrice) {
-      o.gasPrice = fee.gasPrice.mul(15).div(10);
+      const MIN_GP = ethers.utils.parseUnits('40', 'gwei');
+      let gp = fee.gasPrice.mul(15).div(10);
+      if (gp.lt(MIN_GP)) gp = MIN_GP;
+      o.gasPrice = gp;
     }
     return o;
   } catch { return {}; } // 계산 실패 시 지갑에 맡김 (기존 동작)
