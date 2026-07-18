@@ -2336,41 +2336,99 @@ function startStatusCountdown() {
 
 // ── 스마트 컨트랙트 호출 (ethers.js + Reown AppKit) ───────────────────────
 
-// 요청을 먼저 보낸 뒤 Trust Wallet 앱을 전면으로 (WalletConnect 사용 시)
-async function sendAndWait(txPromise) {
-  nudgeWalletApp();
-  const tx = await txPromise;
+// ── 트랜잭션 전송 (Trust Wallet 노드 401 우회 강화판) ─────────────────────
+// Trust Wallet 내부 노드가 간헐적으로 401을 반환하므로:
+// ① 가스량·수수료를 공용 RPC로 미리 계산해 지갑 노드 의존 최소화 (지갑은 서명·전송만)
+// ② 401/일시 오류 시 자동 재시도 (2회, 간격 2초)
+// ③ 완료 확인(영수증 대기)도 공용 RPC로 수행
+async function buildTxOverrides(populatePromise) {
+  try {
+    const readP = await getReadProvider();
+    if (!readP || !walletAddress) return {};
+    const txReq = await populatePromise;
+    const [est, fee] = await Promise.all([
+      readP.estimateGas({ to: txReq.to, data: txReq.data, from: walletAddress }),
+      readP.getFeeData(),
+    ]);
+    const o = { gasLimit: est.mul(15).div(10) }; // 여유 50%
+    if (fee.maxFeePerGas && fee.maxPriorityFeePerGas) {
+      o.maxFeePerGas = fee.maxFeePerGas.mul(2);
+      o.maxPriorityFeePerGas = fee.maxPriorityFeePerGas.mul(2);
+    } else if (fee.gasPrice) {
+      o.gasPrice = fee.gasPrice.mul(15).div(10);
+    }
+    return o;
+  } catch { return {}; } // 계산 실패 시 지갑에 맡김 (기존 동작)
+}
+
+async function sendWithRetry(makeTx) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await makeTx(); }
+    catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || e);
+      // 사용자 거부는 재시도하지 않음
+      if (e?.code === 4001 || /reject|denied|cancel/i.test(msg)) throw e;
+      // 지갑 노드 일시 오류(401/403/429/internal)만 재시도
+      if (!/401|403|429|internal|timeout|network/i.test(msg)) throw e;
+      await sleep(2000);
+    }
+  }
+  throw lastErr;
+}
+
+// 완료 확인은 공용 RPC로 (지갑 노드 의존 제거)
+async function waitForReceipt(tx) {
+  try {
+    const readP = await getReadProvider();
+    if (readP) return await readP.waitForTransaction(tx.hash);
+  } catch { /* 공용 RPC 실패 시 지갑 경유 */ }
   return tx.wait();
 }
 
+// 요청을 먼저 보낸 뒤 Trust Wallet 앱을 전면으로 (WalletConnect 사용 시)
+async function sendAndWait(contract, method, args) {
+  const overrides = await buildTxOverrides(contract.populateTransaction[method](...args));
+  nudgeWalletApp();
+  const tx = await sendWithRetry(() => contract[method](...args, overrides));
+  return waitForReceipt(tx);
+}
+
 async function approveMpc(amount) {
-  return sendAndWait(mpcContract.approve(CONFIG.ESCROW_PROXY, amount));
+  return sendAndWait(mpcContract, 'approve', [CONFIG.ESCROW_PROXY, amount]);
 }
 async function approveUsdt(amount) {
-  return sendAndWait(usdtContract.approve(CONFIG.ESCROW_PROXY, amount));
+  return sendAndWait(usdtContract, 'approve', [CONFIG.ESCROW_PROXY, amount]);
 }
 async function callCommitTrade(commitHash) {
-  nudgeWalletApp();
-  const tx = await escrowContract.commitTrade(commitHash);
-  const receipt = await tx.wait();
-  // TradeCommitted 이벤트에서 tradeId 파싱
+  const receipt = await sendAndWait(escrowContract, 'commitTrade', [commitHash]);
+  // TradeCommitted 이벤트에서 tradeId 파싱 (공용 RPC 영수증은 raw logs만 있음)
   const event = receipt.events?.find(e => e.event === 'TradeCommitted');
-  return event?.args?.tradeId || receipt.logs?.[0]?.topics?.[1];
+  if (event?.args?.tradeId) return event.args.tradeId;
+  const iface = new ethers.utils.Interface(ESCROW_ABI);
+  for (const log of (receipt.logs || [])) {
+    try {
+      const parsed = iface.parseLog(log);
+      if (parsed.name === 'TradeCommitted') return parsed.args.tradeId;
+    } catch {}
+  }
+  return receipt.logs?.[0]?.topics?.[1];
 }
 async function callRevealAndDeposit(tradeId, mpcAmt, price, krw, secret) {
-  return sendAndWait(escrowContract.revealAndDeposit(tradeId, mpcAmt, price, krw, secret));
+  return sendAndWait(escrowContract, 'revealAndDeposit', [tradeId, mpcAmt, price, krw, secret]);
 }
 async function callBuyerDeposit(tradeId) {
-  return sendAndWait(escrowContract.buyerDeposit(tradeId));
+  return sendAndWait(escrowContract, 'buyerDeposit', [tradeId]);
 }
 async function callConfirm(tradeId) {
-  return sendAndWait(escrowContract.confirmTrade(tradeId));
+  return sendAndWait(escrowContract, 'confirmTrade', [tradeId]);
 }
 async function callCancel(tradeId) {
-  return sendAndWait(escrowContract.cancelTrade(tradeId));
+  return sendAndWait(escrowContract, 'cancelTrade', [tradeId]);
 }
 async function callExpire(tradeId) {
-  return sendAndWait(escrowContract.expireTrade(tradeId));
+  return sendAndWait(escrowContract, 'expireTrade', [tradeId]);
 }
 async function fetchTrade(tradeId) {
   // 읽기는 fallback RPC provider로 시도 → 실패 시 wallet provider로 재시도
