@@ -676,7 +676,8 @@ const CONFIG = {
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
   RPC_FALLBACKS: [
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능 (장터 1순위)
-    'https://icy-green-pallet.matic.quiknode.pro/93742044e6bc41d9c0515376f1a8b0d8e8ef2efd/', // 전용 엔드포인트 (일반 조회 안정, 이벤트 조회는 불가)
+    // 주의: 전용 엔드포인트(icy-green-pallet)는 도메인 제한(referrer)이 걸려 브라우저 밖 요청 시 401 →
+    //       앱 조회 경로에서 제거 (referrer가 없는 fetch/트랜잭션 준비 조회에서 오류 유발)
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
     'https://1rpc.io/matic',
