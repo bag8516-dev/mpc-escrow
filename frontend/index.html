@@ -566,6 +566,13 @@ function installApp() {
     <div class="modal-handle"></div>
     <div class="modal-title">⚠️ 오류 발생</div>
     <div id="modalErrorBody" style="color:var(--text2);font-size:14px;line-height:1.6"></div>
+    <div id="errDiagArea" style="display:none;margin-top:12px">
+      <div style="font-size:12px;color:var(--text3);line-height:1.6">문제가 해결되지 않으면 아래 버튼으로 <strong style="color:var(--gold)">오류 정보를 복사</strong>해서 카카오 문의에 붙여넣어 주세요. 원인을 바로 찾을 수 있습니다.</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-sm btn-outline" style="flex:1" id="btnCopyErr" onclick="copyErrInfo()">📋 오류 정보 복사</button>
+        <button class="btn btn-sm btn-outline" style="flex:1" onclick="openKakao()">💬 카카오 문의</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeModal('modalError')">확인</button>
     </div>
@@ -794,7 +801,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026071906';
+const APP_VERSION = '2026072007';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2700,7 +2707,48 @@ function showToast(msg, duration=2500) {
 
 function showError(msg) {
   document.getElementById('modalErrorBody').innerHTML = msg;
+  // 실제 오류(parseError 경유)일 때만 "오류 정보 복사" 영역 표시 (입력값 안내 등에는 불필요)
+  const fresh = window._lastErrDiag && Date.now() - window._lastErrDiag.at < 8000;
+  document.getElementById('errDiagArea').style.display = fresh ? 'block' : 'none';
   document.getElementById('modalError').classList.add('show');
+}
+
+function copyErrInfo() {
+  const d = window._lastErrDiag || {};
+  const text = [
+    '[MPC 에스크로 오류 신고]',
+    '시각: ' + new Date(d.at || Date.now()).toLocaleString('ko-KR'),
+    '버전: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
+    '지갑: ' + (walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : '미연결'),
+    '거래ID: ' + (typeof currentTradeId !== 'undefined' && currentTradeId ? currentTradeId : '없음'),
+    '기기: ' + navigator.userAgent,
+    '오류 원문: ' + (d.raw || '없음') + (d.code ? ' (code ' + d.code + ')' : ''),
+  ].join('\n');
+  const done = () => {
+    const btn = document.getElementById('btnCopyErr');
+    btn.textContent = '✅ 복사됨! 카카오 문의에 붙여넣어 주세요';
+    setTimeout(() => { btn.textContent = '📋 오류 정보 복사'; }, 3000);
+  };
+  // Trust Wallet 브라우저 등 navigator.clipboard 미지원 대비 폴백
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    done();
+  } catch {
+    showToast('복사에 실패했습니다. 오류 화면을 캡처해서 보내주세요.');
+  }
 }
 
 function closeModal(id) {
@@ -2802,6 +2850,8 @@ function openKakao() {
 function parseError(err) {
   const msg = err?.message || String(err);
   const code = err?.code || '';
+  // 오류 정보 복사용 원본 기록 (개인정보 없음 — 오류 원문·코드만)
+  window._lastErrDiag = { raw: String(msg).slice(0, 500), code, at: Date.now() };
 
   // 사용자가 직접 서명을 거부한 경우 (Trust Wallet, MetaMask 공통)
   if (
