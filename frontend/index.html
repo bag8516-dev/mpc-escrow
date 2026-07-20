@@ -794,7 +794,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026071905';
+const APP_VERSION = '2026071906';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2817,6 +2817,10 @@ function parseError(err) {
     return '✋ 서명을 취소했습니다. 거래를 다시 진행하려면 버튼을 다시 눌러주세요.';
   }
 
+  // Trust Wallet 앱 자체 내부 오류 (안드로이드 Java 예외 등) — 지갑 앱 업데이트 필요
+  if (/Java exception|onRequest|method invocation/i.test(msg)) {
+    return '❌ Trust Wallet 앱 자체 오류입니다. (저희 서비스 문제가 아닙니다)<br><br>1. Play 스토어(앱스토어)에서 <strong>Trust Wallet을 최신 버전으로 업데이트</strong><br>2. 휴대폰을 재시작<br>3. 다시 접속해서 시도<br><br>그래도 반복되면 카카오 문의를 이용해주세요.';
+  }
   // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내
   if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
     return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>반복되면 카카오 문의를 이용해주세요.';
