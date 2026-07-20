@@ -801,7 +801,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072007';
+const APP_VERSION = '2026072008';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2336,6 +2336,7 @@ async function editPriceById(tradeId) {
 async function cancelTradeById(tradeId) {
   const ok = await showConfirm('거래 취소', '거래를 취소하고 MPC를 돌려받겠습니까?');
   if (!ok) return;
+  showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
   try {
     await callCancel(tradeId);
     updateLocalTradeStatus(tradeId, 'CANCELLED');
@@ -2348,6 +2349,7 @@ async function cancelTradeById(tradeId) {
 async function expireTradeById(tradeId) {
   const ok = await showConfirm('만료 처리', '판매 시간(24시간)이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
   if (!ok) return;
+  showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
   try {
     await callExpire(tradeId);
     updateLocalTradeStatus(tradeId, 'EXPIRED');
@@ -2486,6 +2488,14 @@ async function sendAndWait(contract, method, args, checkDone) {
     window._txBusy = false;
   }
 }
+// 지갑이 응답(승인/거부) 없이 요청을 삼키는 기기 대비 — 시간 초과 시 오류로 전환해 재시도·안내로 이어지게
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    sleep(ms).then(() => { throw new Error(label || 'timeout'); }),
+  ]);
+}
+
 async function _sendAndWaitInner(contract, method, args, checkDone) {
   let lastErr;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -2494,7 +2504,12 @@ async function _sendAndWaitInner(contract, method, args, checkDone) {
       const overrides = attempt < 3
         ? await buildTxOverrides(contract.populateTransaction[method](...args), attempt)
         : {};
-      const tx = await contract[method](...args, overrides);
+      showToast('📲 Trust Wallet 서명 창이 뜨면 [확인]을 눌러주세요', 5000);
+      const tx = await withTimeout(
+        contract[method](...args, overrides),
+        45000,
+        '지갑 앱이 45초간 응답하지 않았습니다 (wallet timeout)'
+      );
       return await waitForReceipt(tx);
     } catch (e) {
       lastErr = e;
@@ -2874,6 +2889,9 @@ function parseError(err) {
   // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내
   if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
     return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>반복되면 카카오 문의를 이용해주세요.';
+  }
+  if (/wallet timeout/i.test(msg)) {
+    return '❌ Trust Wallet이 서명 창을 띄우지 못했습니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. Play 스토어(앱스토어)에서 Trust Wallet 업데이트 확인<br>3. 다시 시도<br><br>반복되면 아래 [오류 정보 복사]로 카카오 문의해주세요.';
   }
   if (/below minimum|underpriced|tip cap/i.test(msg)) {
     return '❌ 네트워크 수수료 기준이 일시적으로 높아졌습니다. 잠시 후 다시 시도해주세요.';
