@@ -135,6 +135,10 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
       <div class="input-wrap" style="margin-bottom:12px">
         <input type="text" id="admSearch" placeholder="🔍 지갑 주소 또는 거래 ID 검색 (4자 이상)" oninput="setAdminSearch(this.value)" style="font-size:14px">
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-sm btn-outline" id="admTabAll" onclick="setAdmFilter('all')" style="flex:1;border-color:var(--gold);color:var(--gold)">전체</button>
+        <button class="btn btn-sm btn-outline" id="admTabExpired" onclick="setAdmFilter('expired')" style="flex:1">⏰ 반환 필요만</button>
+      </div>
       <div id="tradeStats"></div>
       <div id="tradeList" style="margin-top:12px;"><div class="empty-state">조회 중...</div></div>
       <button class="btn btn-outline btn-sm" style="margin-top:12px;width:auto;" onclick="loadTrades()">🔄 새로고침</button>
@@ -516,6 +520,19 @@ function setAdminSearch(v) {
   renderAdminTrades(cache);
 }
 
+// 목록 필터 탭: 전체 / 반환 필요(24시간 경과 미반환)만
+let _admFilter = 'all';
+function setAdmFilter(f) {
+  _admFilter = f;
+  const on = (el, active) => {
+    el.style.borderColor = active ? 'var(--gold)' : '';
+    el.style.color = active ? 'var(--gold)' : '';
+  };
+  on(document.getElementById('admTabAll'), f === 'all');
+  on(document.getElementById('admTabExpired'), f === 'expired');
+  renderAdminTrades(loadScanCache());
+}
+
 function renderAdminTrades(cache) {
   const listEl = document.getElementById('tradeList');
   const statsEl = document.getElementById('tradeStats');
@@ -567,6 +584,17 @@ function renderAdminTrades(cache) {
     ).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     listEl.innerHTML = `<div style="font-size:12px;color:var(--gold);margin-bottom:8px">검색 결과 ${hits.length}건 (전체 기간)</div>`
       + (hits.length ? hits.map(row).join('') : '<div class="empty-state">일치하는 거래가 없습니다</div>');
+    return;
+  }
+
+  // "반환 필요만" 탭: 24시간 경과했는데 아직 반환 안 된 판매글만 표시
+  if (_admFilter === 'expired') {
+    const need = all.filter(it => it.status === 2 && (it.createdAt || 0) + 86400 - nowSec <= 0)
+      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // 오래된 것부터
+    const needMpc = need.reduce((s, it) => s + it.mpcAmt, 0);
+    listEl.innerHTML =
+      `<div style="font-size:12px;font-weight:700;color:var(--danger);margin:4px 0 6px">⏰ 반환 필요 ${need.length}건 · ${needMpc.toLocaleString()} MPC (오래된 순)</div>`
+      + (need.length ? need.map(row).join('') : '<div class="empty-state" style="padding:14px 0">반환 필요한 거래가 없습니다 🎉</div>');
     return;
   }
 
