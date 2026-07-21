@@ -569,7 +569,7 @@ function installApp() {
     <div id="errDiagArea" style="display:none;margin-top:12px">
       <div style="font-size:12px;color:var(--text3);line-height:1.6">문제가 해결되지 않으면 아래 버튼으로 <strong style="color:var(--gold)">오류 정보를 복사</strong>해서 카카오 문의에 붙여넣어 주세요. 원인을 바로 찾을 수 있습니다.</div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-sm btn-outline" style="flex:1" id="btnCopyErr" onclick="copyErrInfo()">📋 오류 정보 복사</button>
+        <button class="btn btn-sm btn-outline" style="flex:1" id="btnCopyErr" onclick="copyErrInfo()">오류 정보 복사</button>
         <button class="btn btn-sm btn-outline" style="flex:1" onclick="openKakao()">💬 카카오 문의</button>
       </div>
     </div>
@@ -801,7 +801,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072009';
+const APP_VERSION = '2026072110';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1309,7 +1309,7 @@ async function maybeOfferResume() {
   }
 
   const ok = await showConfirm(
-    '📋 이어서 등록하시겠습니까?',
+    '이어서 등록하시겠습니까?',
     `등록하다 중단된 판매가 있습니다.<br><br>
      <strong>${Number(d.mpcAmt).toLocaleString()} MPC · 1개당 ${Number(d.pricePerMpc).toLocaleString()}원</strong><br><br>
      이어서 진행하면 이미 완료한 서명은 건너뜁니다.`
@@ -2733,6 +2733,8 @@ function showError(msg) {
   // 실제 오류(parseError 경유)일 때만 "오류 정보 복사" 영역 표시 (입력값 안내 등에는 불필요)
   const fresh = window._lastErrDiag && Date.now() - window._lastErrDiag.at < 8000;
   document.getElementById('errDiagArea').style.display = fresh ? 'block' : 'none';
+  const rt = document.getElementById('errReportText');
+  if (rt) rt.style.display = 'none'; // 새 오류창에서는 이전 신고 전문 숨김 (복사 버튼 누르면 다시 표시)
   document.getElementById('modalError').classList.add('show');
 }
 
@@ -2747,30 +2749,46 @@ function copyErrInfo() {
     '기기: ' + navigator.userAgent,
     '오류 원문: ' + (d.raw || '없음') + (d.code ? ' (code ' + d.code + ')' : ''),
   ].join('\n');
+  // 자동 복사가 안 되는 기기 대비: 신고 전문을 항상 화면에도 표시 (길게 눌러 수동 복사 가능)
+  let ta = document.getElementById('errReportText');
+  if (!ta) {
+    ta = document.createElement('textarea');
+    ta.id = 'errReportText';
+    ta.readOnly = true;
+    ta.style.cssText = 'width:100%;height:110px;margin-top:8px;font-size:11px;font-family:monospace;background:var(--card2,#0F1A30);color:var(--text2,#B8C6D8);border:1px solid var(--gold,#C9A84C);border-radius:8px;padding:8px;box-sizing:border-box';
+    document.getElementById('errDiagArea').appendChild(ta);
+  }
+  ta.value = text;
+  ta.style.display = 'block';
   const done = () => {
     const btn = document.getElementById('btnCopyErr');
     btn.textContent = '✅ 복사됨! 카카오 문의에 붙여넣어 주세요';
-    setTimeout(() => { btn.textContent = '📋 오류 정보 복사'; }, 3000);
+    setTimeout(() => { btn.textContent = '오류 정보 복사'; }, 3000);
+    showToast('✅ 복사됐습니다. 안 됐다면 아래 상자를 길게 눌러 [모두 선택]→[복사] 해주세요', 5000);
+  };
+  const manual = () => {
+    try { ta.focus(); ta.select(); ta.setSelectionRange(0, text.length); } catch {}
+    showToast('아래 상자를 길게 눌러 [모두 선택]→[복사] 해주세요', 6000);
   };
   // Trust Wallet 브라우저 등 navigator.clipboard 미지원 대비 폴백
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done, manual));
   } else {
-    fallbackCopy(text, done);
+    fallbackCopy(text, done, manual);
   }
 }
-function fallbackCopy(text, done) {
+function fallbackCopy(text, done, manual) {
   try {
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta);
     ta.focus(); ta.select();
-    document.execCommand('copy');
+    const ok = document.execCommand('copy');
     document.body.removeChild(ta);
-    done();
+    if (ok) done(); else manual();
   } catch {
-    showToast('복사에 실패했습니다. 오류 화면을 캡처해서 보내주세요.');
+    manual();
   }
 }
 
