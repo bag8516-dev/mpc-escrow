@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072112';
+const APP_VERSION = '2026072113';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2563,10 +2563,12 @@ async function _sendAndWaitInner(contract, method, args, checkDone) {
         ? await buildTxOverrides(contract.populateTransaction[method](...args), attempt)
         : {};
       showToast('📲 Trust Wallet 서명 창이 뜨면 [확인]을 눌러주세요', 5000);
+      // 예비 연결(WalletConnect)은 앱 전환+알림 확인 시간이 필요하므로 대기를 2분으로 연장
+      const waitMs = window.__usingWC ? 120000 : 45000;
       const tx = await withTimeout(
         contract[method](...args, overrides),
-        45000,
-        '지갑 앱이 45초간 응답하지 않았습니다 (wallet timeout)'
+        waitMs,
+        '지갑 앱이 응답하지 않았습니다 (wallet timeout)'
       );
       return await waitForReceipt(tx);
     } catch (e) {
@@ -2965,6 +2967,10 @@ function parseError(err) {
   // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내 + 예비 연결 방식 제공
   if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
     return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>계속 반복되면 아래 버튼으로 <strong>예비 연결 방식</strong>을 사용해보세요. (Trust Wallet 앱의 문제 구간을 우회합니다)<br><br><button class="btn btn-sm btn-outline" style="width:100%" onclick="closeModal(\'modalError\');altConnectEntry()">🔁 예비 연결 방식으로 다시 연결</button>';
+  }
+  // 예비 연결(WalletConnect) 세션 오류 — 재연결 안내
+  if (/session (expired|topic|not found)|proposal expired|pairing|relayer/i.test(msg)) {
+    return '❌ 예비 연결이 끊어졌습니다.<br><br>연결 화면의 <strong>[연결이 안 되나요? 예비 연결 방식]</strong> 버튼으로 다시 연결한 뒤 시도해주세요.';
   }
   if (/wallet timeout/i.test(msg)) {
     return '❌ Trust Wallet이 서명 창을 띄우지 못했습니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. Play 스토어(앱스토어)에서 Trust Wallet 업데이트 확인<br>3. 다시 시도<br><br>반복되면 아래 [오류 정보 복사]로 카카오 문의해주세요.';
