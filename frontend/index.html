@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072113';
+const APP_VERSION = '2026072214';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1882,6 +1882,71 @@ async function loadUserTrades() {
 
   // 진행 중 거래가 있으면 카운트다운 실시간 업데이트 시작
   startStatusCountdown();
+
+  // 접속 알림: 반환 필요한 글 + 새로 판매 완료된 글 안내 (읽기 전용 — 지갑 호출 없음)
+  checkTradeAlerts();
+}
+
+// ── 접속 시 자동 알림 (반환 필요 / 판매 완료) ────────────────────────────
+// 공용 RPC로 동기화된 로컬 상태만 읽음 — Trust Wallet을 전혀 거치지 않아 기기별 오류와 무관
+const SEEN_COMPLETED_KEY = 'mpc_seen_completed_v1';
+async function checkTradeAlerts() {
+  try {
+    if (!walletAddress) return;
+    const mine = Object.values(getLocalTrades()).filter(t =>
+      t.seller && t.seller.toLowerCase() === walletAddress.toLowerCase());
+
+    // 1) 새로 판매 완료된 글 (지난 확인 이후)
+    let seen;
+    const seenRaw = localStorage.getItem(SEEN_COMPLETED_KEY);
+    const completed = mine.filter(t => t.status === 'COMPLETED');
+    if (seenRaw === null) {
+      // 최초 실행: 과거 완료 건은 알림 없이 기준선만 저장 (옛날 거래로 알림 폭탄 방지)
+      localStorage.setItem(SEEN_COMPLETED_KEY, JSON.stringify(completed.map(t => t.tradeId)));
+      seen = null;
+    } else {
+      seen = new Set(JSON.parse(seenRaw));
+    }
+    const newDone = seen ? completed.filter(t => !seen.has(t.tradeId)) : [];
+
+    // 2) 반환 필요한 글 (24시간 경과, 아직 반환 안 함) — 세션당 1회만 안내
+    const now = Date.now();
+    const needReturn = mine.filter(t =>
+      t.status === 'PENDING' && t.createdAt && now - t.createdAt > CONFIG.TRADE_TIMEOUT * 1000);
+    const showReturn = needReturn.length > 0 && !window._returnAlertShown;
+
+    if (newDone.length === 0 && !showReturn) return;
+
+    let html = '';
+    if (newDone.length > 0) {
+      const doneMpc = newDone.reduce((s, t) => s + (t.mpcAmt || 0), 0);
+      const doneUsdt = newDone.reduce((s, t) => s + (t.usdtCeil || 0), 0);
+      html += `<div style="background:var(--card2);border:1px solid var(--success);border-radius:10px;padding:12px;margin-bottom:10px">
+        🎉 <strong style="color:var(--success)">판매 완료!</strong><br>
+        판매하신 <strong>${doneMpc.toLocaleString()} MPC</strong>(${newDone.length}건)가 판매되어
+        <strong>${doneUsdt.toFixed(1)} USDT</strong>가 지갑으로 입금되었습니다.<br>
+        <span style="font-size:12px;color:var(--text3)">자세한 내용은 [내역] 탭에서 확인하세요.</span></div>`;
+    }
+    if (showReturn) {
+      const retMpc = needReturn.reduce((s, t) => s + (t.mpcAmt || 0), 0);
+      html += `<div style="background:var(--card2);border:1px solid var(--gold);border-radius:10px;padding:12px">
+        ⏰ <strong style="color:var(--gold)">반환할 판매글이 있습니다</strong><br>
+        24시간이 지난 판매글 <strong>${needReturn.length}건 (${retMpc.toLocaleString()} MPC)</strong>이 반환을 기다리고 있습니다.<br>
+        <span style="font-size:12px;color:var(--text3)">[진행 중] 탭에서 [만료 처리 및 MPC 반환]을 눌러주세요. (서명 1번, 오래 두셔도 안전합니다)</span></div>`;
+    }
+
+    const goStatus = showReturn; // 확인 누르면 진행 중 탭으로 이동할지
+    const ok = await showConfirm('📢 알림', html + (goStatus ? '<br>지금 반환하러 가시겠습니까?' : ''));
+    // 완료 알림은 표시했으면 확인 처리 (다시 안 뜨게)
+    if (newDone.length > 0) {
+      const nowSeen = seen || new Set();
+      newDone.forEach(t => nowSeen.add(t.tradeId));
+      completed.forEach(t => nowSeen.add(t.tradeId));
+      localStorage.setItem(SEEN_COMPLETED_KEY, JSON.stringify([...nowSeen]));
+    }
+    if (showReturn) window._returnAlertShown = true;
+    if (ok && goStatus) showTab('status');
+  } catch { /* 알림 실패는 기능에 영향 없음 */ }
 }
 
 async function recoverTradesFromChain() {
