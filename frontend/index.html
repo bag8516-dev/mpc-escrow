@@ -750,6 +750,8 @@ async function getReadProvider() {
       await p.getBlockNumber(); // 연결 확인
       _readProvider = p;
       _readProviderIdx = i;
+      // 오류 신고용 기록: 공용 RPC가 정상인데 401이면 지갑 노드 문제로 특정 가능
+      window._rpcHealth = { url: CONFIG.RPC_FALLBACKS[i], at: Date.now() };
       if (i > 0) console.warn(`RPC 전환됨: ${CONFIG.RPC_FALLBACKS[i]}`);
       return p;
     } catch { /* 다음 RPC 시도 */ }
@@ -798,10 +800,15 @@ let currentTradeId = null;    // 현재 링크의 거래 ID
 let pendingTrades = {};       // localStorage 캐시
 let signGuideCallback = null;
 
+// 오류 신고용: 마지막으로 진행하던 작업 단계 (신고문에 포함되어 발생 지점 특정)
+// — 거래ID 없는 신고(판매자 흐름·연결 단계)에서도 어느 단계였는지 알 수 있게 함
+let _opStage = '';
+function setStage(s) { _opStage = s; }
+
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072110';
+const APP_VERSION = '2026072111';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -904,6 +911,7 @@ function twDeepLink(targetUrl) {
 
 // ── 지갑 연결 ──────────────────────────────────────────────────────────────
 async function connectWallet() {
+  setStage('지갑 연결');
   const btn = document.getElementById('btnConnect');
   setButtonLoading(btn, '연결 중...');
   try {
@@ -968,6 +976,7 @@ function loadWcLib() {
 }
 
 async function connectViaWalletConnect(btn) {
+  setStage('예비 연결(WalletConnect)');
   try {
     setButtonLoading(btn, 'Trust Wallet 연결 준비 중...');
     await loadWcLib();
@@ -1035,6 +1044,7 @@ function nudgeWalletApp() {
 
 async function ensurePolygonNetwork() {
   if (!window.__ethersProvider) return;
+  setStage('네트워크 확인');
   const hexId = '0x' + CONFIG.CHAIN_ID.toString(16);
   // 주의: 체인 확인(getNetwork)은 지갑 노드를 거치므로 노드 401에 취약.
   // 확인 없이 바로 전환을 요청한다 — 이미 폴리곤이면 지갑이 조용히 무시(no-op)함.
@@ -1331,6 +1341,7 @@ async function maybeOfferResume() {
 
 // 예약까지 완료된 거래의 예치(마지막 서명)만 이어서 진행
 async function resumeReveal(d) {
+  setStage('판매 이어하기'); window._diagTradeId = d.tradeId;
   const btn = document.getElementById('btnCreateTrade');
   showTab('sell');
   try {
@@ -1383,6 +1394,7 @@ async function resumeReveal(d) {
 // ── 거래 생성 플로우 ──────────────────────────────────────────────────────
 async function createTradeFlow() {
   if (!requireWallet()) return;
+  setStage('판매 준비(잔액 조회)');
   const mpcAmt      = parseFloat(document.getElementById('sellMpcAmount').value);
   const pricePerMpc = parseFloat(document.getElementById('sellPricePerMpc').value);
   // 환율은 실시간 값을 강제 적용 (화면 값·조작과 무관)
@@ -1655,6 +1667,7 @@ function showExpiredPage() {
 async function buyDepositFlow() {
   if (!requireWallet()) return;
   if (!currentTradeId) { showError('거래 ID가 없습니다'); return; }
+  setStage('구매 준비(잔액 조회)');
 
   // 조회 4건을 미리 병렬로 시작 — 주소 확인 팝업을 읽는 동안 완료됨 (대기 단축)
   const preload = Promise.all([
@@ -2522,7 +2535,11 @@ async function _sendAndWaitInner(contract, method, args, checkDone) {
     } catch (e) {
       lastErr = e;
       if (isUserReject(e)) throw e; // 사용자가 직접 거부한 경우만 즉시 중단
-      if (checkDone) {
+      // 지갑 노드가 요청 자체를 거부(401/403)한 경우: 전송이 시작되지 않은 것이므로
+      // 결과 확인 대기(최대 9초×회차)를 생략하고 곧바로 재시도 → 노드가 계속 죽어있으면
+      // 40초 넘게 기다리지 않고 빠르게 안내(예비 연결 방식)까지 도달
+      const nodeRefused = /RPC HTTP|401|403/i.test(String(e?.message || e));
+      if (checkDone && !nodeRefused) {
         for (let k = 0; k < 3; k++) {
           await sleep(3000);
           try {
@@ -2562,14 +2579,17 @@ function tradeStatusCheck(tradeId, wantStatus) {
 }
 
 async function approveMpc(amount) {
+  setStage('MPC 승인');
   return sendAndWait(mpcContract, 'approve', [CONFIG.ESCROW_PROXY, amount],
     async () => (await readAllowance(CONFIG.MPC_TOKEN, walletAddress)).gte(amount));
 }
 async function approveUsdt(amount) {
+  setStage('USDT 승인');
   return sendAndWait(usdtContract, 'approve', [CONFIG.ESCROW_PROXY, amount],
     async () => (await readAllowance(CONFIG.USDT_TOKEN, walletAddress)).gte(amount));
 }
 async function callCommitTrade(commitHash) {
+  setStage('판매 예약(commit)');
   // 결과 확인: 내 거래 목록에서 같은 commitHash의 예약(상태 1)을 찾으면 성공
   const receipt = await sendAndWait(escrowContract, 'commitTrade', [commitHash], async () => {
     const c = await readEscrow();
@@ -2595,19 +2615,24 @@ async function callCommitTrade(commitHash) {
   return receipt.logs?.[0]?.topics?.[1];
 }
 async function callRevealAndDeposit(tradeId, mpcAmt, price, krw, secret) {
+  setStage('MPC 예치(reveal)'); window._diagTradeId = tradeId;
   return sendAndWait(escrowContract, 'revealAndDeposit', [tradeId, mpcAmt, price, krw, secret],
     tradeStatusCheck(tradeId, 2));
 }
 async function callBuyerDeposit(tradeId) {
+  setStage('USDT 입금');
   return sendAndWait(escrowContract, 'buyerDeposit', [tradeId], tradeStatusCheck(tradeId, 3));
 }
 async function callConfirm(tradeId) {
+  setStage('거래 확정');
   return sendAndWait(escrowContract, 'confirmTrade', [tradeId], tradeStatusCheck(tradeId, 4));
 }
 async function callCancel(tradeId) {
+  setStage('거래 취소'); window._diagTradeId = tradeId;
   return sendAndWait(escrowContract, 'cancelTrade', [tradeId], tradeStatusCheck(tradeId, 5));
 }
 async function callExpire(tradeId) {
+  setStage('만료 처리'); window._diagTradeId = tradeId;
   return sendAndWait(escrowContract, 'expireTrade', [tradeId], tradeStatusCheck(tradeId, 6));
 }
 async function fetchTrade(tradeId) {
@@ -2745,7 +2770,11 @@ function copyErrInfo() {
     '시각: ' + new Date(d.at || Date.now()).toLocaleString('ko-KR'),
     '버전: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
     '지갑: ' + (walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : '미연결'),
-    '거래ID: ' + (typeof currentTradeId !== 'undefined' && currentTradeId ? currentTradeId : '없음'),
+    '거래ID: ' + ((typeof currentTradeId !== 'undefined' && currentTradeId) || window._diagTradeId || '없음'),
+    '단계: ' + (d.stage || '알 수 없음'),
+    '공용RPC: ' + (window._rpcHealth
+      ? window._rpcHealth.url.replace('https://', '') + ' (' + Math.round((Date.now() - window._rpcHealth.at) / 1000) + '초 전 정상)'
+      : '연결 성공 기록 없음'),
     '기기: ' + navigator.userAgent,
     '오류 원문: ' + (d.raw || '없음') + (d.code ? ' (code ' + d.code + ')' : ''),
   ].join('\n');
@@ -2892,7 +2921,7 @@ function parseError(err) {
   const msg = err?.message || String(err);
   const code = err?.code || '';
   // 오류 정보 복사용 원본 기록 (개인정보 없음 — 오류 원문·코드만)
-  window._lastErrDiag = { raw: String(msg).slice(0, 500), code, at: Date.now() };
+  window._lastErrDiag = { raw: String(msg).slice(0, 500), code, at: Date.now(), stage: _opStage };
 
   // 사용자가 직접 서명을 거부한 경우 (Trust Wallet, MetaMask 공통)
   if (
