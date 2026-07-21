@@ -801,7 +801,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072110';
+const APP_VERSION = '2026072111';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -987,8 +987,11 @@ async function connectViaWalletConnect(btn) {
         },
       });
       // 연결 요청 시 Trust Wallet 앱을 자동으로 연다 (QR 스캔 불필요)
+      // 현재 페이지를 떠나면 연결 상태가 초기화될 수 있으므로 새 창 우선, 실패 시에만 페이지 이동
       wcProvider.on('display_uri', (uri) => {
-        window.location.href = 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
+        const link = 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
+        const w = window.open(link, '_blank');
+        if (!w) window.location.href = link;
       });
       wcProvider.on('disconnect', () => location.reload());
       wcProvider.on('accountsChanged', (accs) => {
@@ -1382,6 +1385,18 @@ async function resumeReveal(d) {
 
 // ── 거래 생성 플로우 ──────────────────────────────────────────────────────
 async function createTradeFlow() {
+  // 즉각 반응 표시 — 버튼이 "무반응"으로 보이는 상황 제거 (이 안내조차 안 뜨면 화면 새로고침 필요 신호)
+  showToast('⏳ 입력 내용을 확인하는 중...', 2000);
+  // 연타 방지: 이미 진행 중이면 조용히 무시하지 않고 알려줌
+  if (window._createBusy) { showToast('이미 등록이 진행 중입니다. 잠시만 기다려주세요.'); return; }
+  window._createBusy = true;
+  try {
+    await _createTradeFlowInner();
+  } finally {
+    window._createBusy = false;
+  }
+}
+async function _createTradeFlowInner() {
   if (!requireWallet()) return;
   const mpcAmt      = parseFloat(document.getElementById('sellMpcAmount').value);
   const pricePerMpc = parseFloat(document.getElementById('sellPricePerMpc').value);
