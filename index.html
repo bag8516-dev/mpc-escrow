@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072214';
+const APP_VERSION = '2026072215';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2863,6 +2863,7 @@ function copyErrInfo() {
     '버전: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
     '지갑: ' + (walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : '미연결'),
     '거래ID: ' + (typeof currentTradeId !== 'undefined' && currentTradeId ? currentTradeId : '없음'),
+    '접속환경: ' + (typeof window.ethereum !== 'undefined' ? 'Trust Wallet 내장 브라우저' : '일반 브라우저(홈화면 앱/삼성인터넷 등)') + (window.__usingWC ? ' + 예비 연결 사용 중' : ''),
     '기기: ' + navigator.userAgent,
     '오류 원문: ' + (d.raw || '없음') + (d.code ? ' (code ' + d.code + ')' : ''),
   ].join('\n');
