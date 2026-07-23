@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072215';
+const APP_VERSION = '2026072316';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -829,9 +829,48 @@ document.addEventListener('visibilitychange', () => {
   if (_lastHiddenAt && Date.now() - _lastHiddenAt > 300000) checkAppVersion();
 });
 
+// ── Trust Wallet 노드 자가진단 + 선제 경고 배너 ──────────────────────────
+// 일부 최신 기종은 TW 내장 브라우저의 노드가 지속적으로 401을 반환.
+// 오류를 겪기 전에 미리 감지해서 "홈 화면 앱으로 이용" 안내를 상단에 표시.
+const TW_BAD_KEY = 'tw_node_bad_v1';
+function markTwNodeBad() {
+  try { localStorage.setItem(TW_BAD_KEY, String(Date.now())); } catch {}
+  showTwWarnBanner();
+}
+function isTwNodeBad() {
+  try {
+    const at = Number(localStorage.getItem(TW_BAD_KEY) || 0);
+    return at > 0 && Date.now() - at < 7 * 86400 * 1000; // 7일간 기억
+  } catch { return false; }
+}
+function showTwWarnBanner() {
+  if (document.getElementById('twWarnBanner')) return;
+  const div = document.createElement('div');
+  div.id = 'twWarnBanner';
+  div.style.cssText = 'position:sticky;top:0;z-index:400;background:#3a2a00;border-bottom:1px solid var(--gold);padding:10px 14px;font-size:13px;line-height:1.5;color:#ffe9b0;display:flex;gap:10px;align-items:center';
+  div.innerHTML = '<span style="flex:1">⚠️ 이 기기는 Trust Wallet 안에서 오류가 잦은 기종입니다. <strong>홈 화면 앱으로 이용</strong>을 권장합니다.</span>'
+    + '<button class="btn btn-sm btn-outline" style="flex-shrink:0" onclick="altConnectEntry()">사용법</button>';
+  document.body.prepend(div);
+}
+async function twNodeHealthCheck() {
+  if (typeof window.ethereum === 'undefined') return; // TW 브라우저 아님
+  if (isTwNodeBad()) { showTwWarnBanner(); return; }   // 이미 문제 기기로 기억됨
+  try {
+    // 지갑 노드에 가벼운 읽기 요청 — 8초 내 응답 없거나 401 계열이면 문제 기기로 기록
+    await Promise.race([
+      window.ethereum.request({ method: 'eth_blockNumber' }),
+      sleep(8000).then(() => { throw new Error('health timeout'); }),
+    ]);
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (/401|403|429|HTTP|timeout|network|Java exception/i.test(msg)) markTwNodeBad();
+  }
+}
+
 // ── 초기화 ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
+  twNodeHealthCheck(); // TW 브라우저면 지갑 노드 자가진단 (백그라운드)
   document.getElementById('officialUrl').textContent = CONFIG.OFFICIAL_URL;
   detectEnvironment();
   setDeviceGuide();
@@ -3032,6 +3071,7 @@ function parseError(err) {
   }
   // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내 + 예비 연결 방식 제공
   if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
+    if (typeof window.ethereum !== 'undefined') { try { markTwNodeBad(); } catch {} } // 문제 기기로 기억 → 다음부터 선제 배너
     return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>계속 반복되면 아래 버튼으로 <strong>예비 연결 방식</strong>을 사용해보세요. (Trust Wallet 앱의 문제 구간을 우회합니다)<br><br><button class="btn btn-sm btn-outline" style="width:100%" onclick="closeModal(\'modalError\');altConnectEntry()">🔁 예비 연결 방식으로 다시 연결</button>';
   }
   // 예비 연결(WalletConnect) 세션 오류 — 재연결 안내
