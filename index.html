@@ -568,7 +568,7 @@ function installApp() {
     <div class="modal-title">⚠️ 오류 발생</div>
     <div id="modalErrorBody" style="color:var(--text2);font-size:14px;line-height:1.6"></div>
     <div id="errDiagArea" style="display:none;margin-top:12px">
-      <div style="font-size:12px;color:var(--text3);line-height:1.6">문제가 해결되지 않으면 아래 버튼으로 <strong style="color:var(--gold)">오류 정보를 복사</strong>해서 카카오 문의에 붙여넣어 주세요. 원인을 바로 찾을 수 있습니다.</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6">문제가 해결되지 않으면 아래 <strong style="color:var(--gold)">오류 정보</strong>를 카카오 문의로 보내주세요. [복사] 버튼이 안 눌리면 <strong>이 화면을 캡처</strong>해서 보내주셔도 됩니다.</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-sm btn-outline" style="flex:1" id="btnCopyErr" onclick="copyErrInfo()">오류 정보 복사</button>
         <button class="btn btn-sm btn-outline" style="flex:1" onclick="openKakao()">💬 카카오 문의</button>
@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072316';
+const APP_VERSION = '2026072317';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2889,14 +2889,18 @@ function showError(msg) {
   // 실제 오류(parseError 경유)일 때만 "오류 정보 복사" 영역 표시 (입력값 안내 등에는 불필요)
   const fresh = window._lastErrDiag && Date.now() - window._lastErrDiag.at < 8000;
   document.getElementById('errDiagArea').style.display = fresh ? 'block' : 'none';
-  const rt = document.getElementById('errReportText');
-  if (rt) rt.style.display = 'none'; // 새 오류창에서는 이전 신고 전문 숨김 (복사 버튼 누르면 다시 표시)
+  if (fresh) {
+    showErrReportBox(); // 신고 전문을 즉시 표시 — 복사 버튼이 안 눌리는 기기도 캡처/수동복사 가능
+  } else {
+    const rt = document.getElementById('errReportText');
+    if (rt) rt.style.display = 'none';
+  }
   document.getElementById('modalError').classList.add('show');
 }
 
-function copyErrInfo() {
+function buildErrReport() {
   const d = window._lastErrDiag || {};
-  const text = [
+  return [
     '[MPC 에스크로 오류 신고]',
     '시각: ' + new Date(d.at || Date.now()).toLocaleString('ko-KR'),
     '버전: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
@@ -2906,7 +2910,9 @@ function copyErrInfo() {
     '기기: ' + navigator.userAgent,
     '오류 원문: ' + (d.raw || '없음') + (d.code ? ' (code ' + d.code + ')' : ''),
   ].join('\n');
-  // 자동 복사가 안 되는 기기 대비: 신고 전문을 항상 화면에도 표시 (길게 눌러 수동 복사 가능)
+}
+// 오류창이 뜰 때 신고 전문을 즉시 화면에 표시 (버튼이 안 눌리는 기기 대비 — 캡처만 보내도 됨)
+function showErrReportBox() {
   let ta = document.getElementById('errReportText');
   if (!ta) {
     ta = document.createElement('textarea');
@@ -2915,8 +2921,14 @@ function copyErrInfo() {
     ta.style.cssText = 'width:100%;height:110px;margin-top:8px;font-size:11px;font-family:monospace;background:var(--card2,#0F1A30);color:var(--text2,#B8C6D8);border:1px solid var(--gold,#C9A84C);border-radius:8px;padding:8px;box-sizing:border-box';
     document.getElementById('errDiagArea').appendChild(ta);
   }
-  ta.value = text;
+  ta.value = buildErrReport();
   ta.style.display = 'block';
+}
+
+function copyErrInfo() {
+  const text = buildErrReport();
+  showErrReportBox();
+  const ta = document.getElementById('errReportText');
   const done = () => {
     const btn = document.getElementById('btnCopyErr');
     btn.textContent = '✅ 복사됨! 카카오 문의에 붙여넣어 주세요';
