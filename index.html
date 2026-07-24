@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072418';
+const APP_VERSION = '2026072419';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -813,6 +813,7 @@ async function checkAppVersion() {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) return;
     const j = await r.json();
+    showOpNotice(j.notice); // 운영 공지 배너 (문구가 있으면 표시, 없으면 제거)
     if (j.v && String(j.v) !== APP_VERSION) {
       sessionStorage.setItem('ver_reloaded_at', String(Date.now()));
       showToast('🔄 새 버전이 있어 자동으로 업데이트합니다...');
@@ -828,6 +829,31 @@ document.addEventListener('visibilitychange', () => {
   // 5분 이상 백그라운드였다가 돌아온 경우만 (지갑 서명 왕복 중 새로고침 방지)
   if (_lastHiddenAt && Date.now() - _lastHiddenAt > 300000) checkAppVersion();
 });
+
+// ── 운영 공지 배너 ─────────────────────────────────────────────────────────
+// version.json의 notice 값으로 원격 제어: 문구를 넣으면 전 회원 앱 상단에 표시, 비우면 사라짐.
+// (트러스트월렛 서버 장애처럼 앱 밖 문제를 실시간 안내하는 용도 — 코드 배포 불필요)
+function showOpNotice(text) {
+  const old = document.getElementById('opNoticeBanner');
+  if (!text || !String(text).trim()) { if (old) old.remove(); return; }
+  // 같은 공지를 이 세션에서 닫았으면 다시 안 띄움
+  try { if (sessionStorage.getItem('op_notice_dismissed') === String(text)) return; } catch {}
+  if (old) { old.querySelector('.op-notice-text').textContent = text; return; }
+  const div = document.createElement('div');
+  div.id = 'opNoticeBanner';
+  div.style.cssText = 'position:sticky;top:0;z-index:401;background:#12233f;border-bottom:1px solid #4a90d9;padding:10px 14px;font-size:13px;line-height:1.5;color:#cfe4ff;display:flex;gap:10px;align-items:center';
+  const span = document.createElement('span');
+  span.className = 'op-notice-text';
+  span.style.flex = '1';
+  span.textContent = text; // 텍스트로만 삽입 (스크립트 삽입 방지)
+  const btn = document.createElement('button');
+  btn.textContent = '닫기';
+  btn.className = 'btn btn-sm btn-outline';
+  btn.style.flexShrink = '0';
+  btn.onclick = () => { try { sessionStorage.setItem('op_notice_dismissed', String(text)); } catch {} div.remove(); };
+  div.appendChild(span); div.appendChild(btn);
+  document.body.prepend(div);
+}
 
 // ── Trust Wallet 노드 자가진단 + 선제 경고 배너 ──────────────────────────
 // 일부 최신 기종은 TW 내장 브라우저의 노드가 지속적으로 401을 반환.
