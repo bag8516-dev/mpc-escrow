@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MPC 에스크로 관리자</title>
+<link rel="manifest" href="admin-manifest.json">
+<meta name="theme-color" content="#0A0F1E">
 <style>
 :root {
   --gold:#C9A84C; --gold-light:#E2C06A; --gold-dark:#A07830;
@@ -95,6 +97,8 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
   <div class="wallet-section">
     <div id="areaConnect">
       <button class="wallet-btn" id="btnConnect" onclick="connectWallet()">🔗 관리자 지갑 연결하기</button>
+      <button class="btn btn-sm btn-outline" style="width:100%;margin-top:8px" onclick="connectAdminViaWC()">예비 연결 방식 (홈 화면 앱용)</button>
+      <button class="btn btn-sm btn-outline" id="btnAdminInstall" style="width:100%;margin-top:8px;display:none;border-color:var(--gold);color:var(--gold)" onclick="installAdminApp()">📲 홈 화면에 관리자 앱 설치</button>
     </div>
     <div id="areaConnected" style="display:none">
       <div class="wallet-connected">
@@ -217,6 +221,7 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
 // ── 설정 ────────────────────────────────────────────────────────────────────
 const ADMIN_CONFIG = {
   CHAIN_ID:    137,
+  WC_PROJECT_ID: '3bb27596d90984a0f485530e30b44cba',
   ESCROW_PROXY:   '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972',
   MULTISIG:       '0x944936BF08e9aeB817Dad323Fd4888A9f1D80e87',
   MPC_TOKEN:      '0x2d854416d2749B1F0eb8a4B2Ab9027989F2ba262',
@@ -302,6 +307,23 @@ function shortAddr(addr) {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
+// ── 홈 화면 앱 설치 (PWA) ────────────────────────────────────────────────
+let _adminInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _adminInstallPrompt = e;
+  const b = document.getElementById('btnAdminInstall');
+  if (b) b.style.display = 'block';
+});
+async function installAdminApp() {
+  if (!_adminInstallPrompt) { showToast('브라우저 메뉴에서 [홈 화면에 추가]를 이용해주세요'); return; }
+  _adminInstallPrompt.prompt();
+  const r = await _adminInstallPrompt.userChoice;
+  if (r.outcome === 'accepted') { showToast('✅ 설치됐습니다. 홈 화면 아이콘으로 접속하세요'); document.getElementById('btnAdminInstall').style.display = 'none'; }
+  _adminInstallPrompt = null;
+}
+if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch {} }
+
 function isOwnerAddr(addr) {
   if (!addr) return false;
   return ADMIN_CONFIG.OWNERS.some(o => o.toLowerCase() === addr.toLowerCase());
@@ -310,7 +332,7 @@ function isOwnerAddr(addr) {
 // ── 지갑 연결 ────────────────────────────────────────────────────────────
 async function connectWallet() {
   if (!window.ethereum) {
-    showToast('Trust Wallet 앱 브라우저에서 접속해주세요');
+    showToast('일반 브라우저·홈 화면 앱에서는 아래 [예비 연결 방식] 버튼을 이용해주세요');
     return;
   }
   try {
@@ -348,40 +370,101 @@ async function connectWallet() {
       }
     }
 
-    // UI 업데이트
-    document.getElementById('areaConnect').style.display = 'none';
-    document.getElementById('areaConnected').style.display = 'block';
-    document.getElementById('displayAddr').textContent = shortAddr(walletAddress);
-
-    isOwner = isOwnerAddr(walletAddress);
-
-    if (!isOwner) {
-      document.getElementById('ownerBadge').textContent = '❌ 권한없음';
-      document.getElementById('ownerBadge').style.color = 'var(--danger)';
-      document.getElementById('pageUnauth').style.display = 'block';
-      return;
-    }
-
-    document.getElementById('ownerBadge').textContent = '✅ 오너';
-    document.getElementById('ownerBadge').style.color = 'var(--success)';
-    document.getElementById('pageAdmin').style.display = 'block';
-
-    // 멀티시그 컨트랙트 초기화
-    multisigContract = new ethers.Contract(ADMIN_CONFIG.MULTISIG, MULTISIG_ABI, ethersSigner);
-
-    // 토큰 선택 변경 시 단위 업데이트
-    document.getElementById('withdrawToken').addEventListener('change', (e) => {
-      document.getElementById('withdrawUnit').textContent = e.target.value;
-    });
-
-    // 데이터 로드
-    await Promise.all([loadBalances(), loadTxList(), loadTrades()]);
+    await finishAdminConnect();
 
   } catch (err) {
     setBtn('btnConnect', '🔗 관리자 지갑 연결하기', false);
     if (err?.code !== 4001 && err?.code !== 'ACTION_REJECTED') {
       showToast('연결 오류: ' + (err?.message || String(err)));
     }
+  }
+}
+
+// 연결 이후 공통 처리 (일반 연결·예비 연결 공용)
+async function finishAdminConnect() {
+  document.getElementById('areaConnect').style.display = 'none';
+  document.getElementById('areaConnected').style.display = 'block';
+  document.getElementById('displayAddr').textContent = shortAddr(walletAddress);
+
+  isOwner = isOwnerAddr(walletAddress);
+
+  if (!isOwner) {
+    document.getElementById('ownerBadge').textContent = '❌ 권한없음';
+    document.getElementById('ownerBadge').style.color = 'var(--danger)';
+    document.getElementById('pageUnauth').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('ownerBadge').textContent = '✅ 오너';
+  document.getElementById('ownerBadge').style.color = 'var(--success)';
+  document.getElementById('pageAdmin').style.display = 'block';
+
+  // 멀티시그 컨트랙트 초기화
+  multisigContract = new ethers.Contract(ADMIN_CONFIG.MULTISIG, MULTISIG_ABI, ethersSigner);
+
+  // 토큰 선택 변경 시 단위 업데이트
+  document.getElementById('withdrawToken').addEventListener('change', (e) => {
+    document.getElementById('withdrawUnit').textContent = e.target.value;
+  });
+
+  // 데이터 로드
+  await Promise.all([loadBalances(), loadTxList(), loadTrades()]);
+}
+
+// ── 예비 연결 (WalletConnect) — 홈 화면 앱/일반 브라우저에서 사용 ─────────
+// Trust Wallet 내장 브라우저 없이 관리자 서명 가능 (서명은 Trust Wallet 앱 알림으로)
+let adminWcProvider = null;
+function loadAdminWcLib() {
+  return new Promise((resolve, reject) => {
+    if (globalThis['@walletconnect/ethereum-provider']) return resolve();
+    const s = document.createElement('script');
+    s.src = 'vendor/wc-ethereum-provider-2.21.1.umd.js';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('연결 모듈 로드 실패. 네트워크를 확인해주세요.'));
+    document.head.appendChild(s);
+  });
+}
+async function connectAdminViaWC() {
+  try {
+    setBtn('btnConnect', '예비 연결 준비 중...', true);
+    await loadAdminWcLib();
+    const WCEP = globalThis['@walletconnect/ethereum-provider'].EthereumProvider;
+    if (!adminWcProvider) {
+      adminWcProvider = await WCEP.init({
+        projectId: ADMIN_CONFIG.WC_PROJECT_ID,
+        chains: [ADMIN_CONFIG.CHAIN_ID],
+        rpcMap: { [ADMIN_CONFIG.CHAIN_ID]: 'https://rpc-mainnet.matic.quiknode.pro' },
+        showQrModal: false,
+        metadata: { name: 'MPC 에스크로 관리자', description: '관리자 페이지', url: location.origin, icons: [location.origin + '/mpc-escrow/icon-192.png'] },
+      });
+      adminWcProvider.on('display_uri', (uri) => {
+        const enc = encodeURIComponent(uri);
+        try { window.location.href = 'trust://wc?uri=' + enc; } catch {}
+        setTimeout(() => {
+          if (document.hidden) return;
+          const link = 'https://link.trustwallet.com/wc?uri=' + enc;
+          const w = window.open(link, '_blank');
+          if (!w) window.location.href = link;
+        }, 1500);
+      });
+      adminWcProvider.on('disconnect', () => location.reload());
+    }
+    if (!adminWcProvider.session) {
+      setBtn('btnConnect', 'Trust Wallet에서 승인해주세요...', true);
+      await adminWcProvider.connect();
+    }
+    const accounts = adminWcProvider.accounts;
+    if (!accounts || !accounts.length) throw new Error('연결이 거부됐습니다');
+    walletAddress = accounts[0];
+    ethersProvider = new ethers.providers.Web3Provider(adminWcProvider);
+    ethersSigner = ethersProvider.getSigner();
+    window.__adminWC = true;
+    showToast('예비 연결 완료 — 서명은 Trust Wallet 앱에서 진행됩니다', 4000);
+    await finishAdminConnect();
+  } catch (err) {
+    setBtn('btnConnect', '🔗 관리자 지갑 연결하기', false);
+    const m = String(err?.message || err);
+    if (!/rejected|declined|cancelled|reset/i.test(m)) showToast('예비 연결 오류: ' + m.slice(0, 60));
   }
 }
 
