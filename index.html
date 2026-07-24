@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072317';
+const APP_VERSION = '2026072418';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1027,11 +1027,18 @@ async function connectViaWalletConnect(btn) {
         },
       });
       // 연결 요청 시 Trust Wallet 앱을 자동으로 연다 (QR 스캔 불필요)
-      // 현재 페이지를 떠나면 연결 상태가 초기화될 수 있으므로 새 창 우선, 실패 시에만 페이지 이동
+      // 1차: 커스텀 스킴으로 앱 직접 호출 — 중간 웹페이지(link.trustwallet.com)를 거치지 않음
+      //      (일부 기기에서 그 페이지의 "앱에서 열기" 버튼이 동작하지 않는 문제 회피)
+      // 2차: 1.5초 내 앱 전환이 없으면 유니버설 링크로 재시도
       wcProvider.on('display_uri', (uri) => {
-        const link = 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
-        const w = window.open(link, '_blank');
-        if (!w) window.location.href = link;
+        const enc = encodeURIComponent(uri);
+        try { window.location.href = 'trust://wc?uri=' + enc; } catch {}
+        setTimeout(() => {
+          if (document.hidden) return; // 이미 Trust Wallet으로 전환됐으면 생략
+          const link = 'https://link.trustwallet.com/wc?uri=' + enc;
+          const w = window.open(link, '_blank');
+          if (!w) window.location.href = link;
+        }, 1500);
       });
       wcProvider.on('disconnect', () => location.reload());
       wcProvider.on('accountsChanged', (accs) => {
