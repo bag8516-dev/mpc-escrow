@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072419';
+const APP_VERSION = '2026072620';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2080,10 +2080,9 @@ async function recoverTradesFromChain() {
 async function fetchMarketLogs(fromBlock, toBlock, topics) {
   const filter = { address: CONFIG.ESCROW_PROXY, topics: [topics] };
   const strategies = [
-    async (lp) => { // ① 5조각 동시 조회 (가장 빠름)
-      const step = Math.max(1, Math.ceil((toBlock - fromBlock + 1) / 5));
+    async (lp) => { // ① 9,500블록씩 동시 조회 (QuickNode 1만 블록 제한 준수, 2026-07 정책 변경)
       const ranges = [];
-      for (let f = fromBlock; f <= toBlock; f += step) ranges.push([f, Math.min(f + step - 1, toBlock)]);
+      for (let f = fromBlock; f <= toBlock; f += 9500) ranges.push([f, Math.min(f + 9499, toBlock)]);
       const results = await Promise.all(ranges.map(([f, t]) =>
         lp.getLogs({ ...filter, fromBlock: f, toBlock: t })));
       const out = [];
