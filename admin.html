@@ -509,7 +509,7 @@ function saveScanCache(cache) {
 
 // startBlock~latest 구간을 청크로 나눠 병렬 조회 (진행률 콜백 지원)
 async function scanNewEvents(startBlock, onProgress) {
-  const CHUNK = 45000;
+  const CHUNK = 9500; // QuickNode eth_getLogs 1만 블록 제한 (2026-07 정책 변경)
   for (const url of ADMIN_CONFIG.RPC_FALLBACKS) {
     try {
       const lp = new ethers.providers.JsonRpcProvider(url);
