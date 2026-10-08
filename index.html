@@ -646,7 +646,7 @@ function installApp() {
     <div class="modal-title">⛽ 수수료 코인(POL) 부족</div>
     <div style="color:var(--text2);font-size:14px;line-height:1.7">
       앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자랍니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br>
-      <strong>해결:</strong> 거래소에서 POL을 1,000원어치 정도 구매해 내 지갑 주소(폴리곤 네트워크)로 보낸 뒤 다시 시도해주세요. 한 번 충전하면 수십 번 거래할 수 있습니다.
+      지갑에 POL을 충전한 후 다시 시도해주세요.
     </div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalPolLow')">확인</button>
   </div>
@@ -834,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100901';
+const APP_VERSION = '2026100902';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3467,7 +3467,7 @@ function parseError(err) {
   // 수수료 코인(POL) 부족 — "insufficient funds"는 수수료용 기본 코인 부족을 뜻한다 (토큰 부족과 별개)
   if (/insufficient funds/i.test(msg)) {
     window._lastErrDiag.title = '수수료 코인(POL) 부족';
-    return '앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자라서 멈춘 것입니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br><strong>해결:</strong> 거래소에서 POL을 1,000원어치 정도 구매해 내 지갑 주소(폴리곤 네트워크)로 보낸 뒤 다시 시도해주세요. 한 번 충전하면 수십 번 거래할 수 있습니다.';
+    return '앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자라서 멈춘 것입니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br>지갑에 POL을 충전한 후 다시 시도해주세요.';
   }
   if (/below minimum|underpriced|tip cap/i.test(msg)) {
     return '❌ 네트워크 수수료 기준이 일시적으로 높아졌습니다. 잠시 후 다시 시도해주세요.';
