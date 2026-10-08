@@ -578,7 +578,7 @@ function installApp() {
 <div class="modal-overlay" id="modalError">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">⚠️ 오류 발생</div>
+    <div class="modal-title" id="modalErrorTitle">⚠️ 오류 발생</div>
     <div id="modalErrorBody" style="color:var(--text2);font-size:14px;line-height:1.6"></div>
     <div id="errDiagArea" style="display:none;margin-top:12px">
       <div style="font-size:12px;color:var(--text3);line-height:1.6">문제가 해결되지 않으면 아래 <strong style="color:var(--gold)">오류 정보</strong>를 카카오 문의로 보내주세요. [복사] 버튼이 안 눌리면 <strong>이 화면을 캡처</strong>해서 보내주셔도 됩니다.</div>
@@ -643,9 +643,10 @@ function installApp() {
 <div class="modal-overlay" id="modalPolLow">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">⛽ 가스비 부족</div>
+    <div class="modal-title">⛽ 수수료 코인(POL) 부족</div>
     <div style="color:var(--text2);font-size:14px;line-height:1.7">
-      트랜잭션 수수료(가스비)가 부족합니다.<br>지갑에 <strong>POL</strong>을 충전한 후 다시 시도해주세요.
+      앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자랍니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br>
+      <strong>해결:</strong> 거래소에서 POL을 1,000원어치 정도 구매해 내 지갑 주소(폴리곤 네트워크)로 보낸 뒤 다시 시도해주세요. 한 번 충전하면 수십 번 거래할 수 있습니다.
     </div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalPolLow')">확인</button>
   </div>
@@ -833,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100830';
+const APP_VERSION = '2026100901';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3247,6 +3248,10 @@ function showError(msg) {
   document.getElementById('modalErrorBody').innerHTML = msg;
   // 실제 오류(parseError 경유)일 때만 "오류 정보 복사" 영역 표시 (입력값 안내 등에는 불필요)
   const fresh = window._lastErrDiag && Date.now() - window._lastErrDiag.at < 8000;
+  // 원인이 분류된 오류는 제목부터 원인을 말한다 (POL 부족 / 서명 거절 / 네트워크 다름)
+  document.getElementById('modalErrorTitle').textContent =
+    (fresh && window._lastErrDiag.title) ? window._lastErrDiag.title : '⚠️ 오류 발생';
+  if (fresh && window._lastErrDiag.title) window._lastErrDiag.title = null; // 제목은 1회용 — 뒤이은 다른 안내창에 남지 않게
   document.getElementById('errDiagArea').style.display = fresh ? 'block' : 'none';
   if (fresh) {
     showErrReportBox(); // 신고 전문을 즉시 표시 — 복사 버튼이 안 눌리는 기기도 캡처/수동복사 가능
@@ -3433,7 +3438,8 @@ function parseError(err) {
     msg.toLowerCase().includes('rejected by user') ||
     msg.toLowerCase().includes('cancelled by user')
   ) {
-    return '✋ 서명을 취소했습니다. 거래를 다시 진행하려면 버튼을 다시 눌러주세요.';
+    window._lastErrDiag.title = '지갑에서 서명 거절/시간 초과';
+    return '앱 고장이 아닙니다. 지갑에서 서명이 완료되지 않았습니다.<br><br>지갑 서명 창에서 <strong>[거절]을 눌렀거나, 비밀번호 입력이 늦어 시간이 지나면</strong> 이렇게 됩니다.<br><br>버튼을 다시 누르고, 지갑 창이 뜨면 <strong>바로 승인</strong>해주세요.';
   }
 
   // Trust Wallet 앱 자체 내부 오류 (안드로이드 Java 예외 등) — 지갑 앱 업데이트 필요
@@ -3450,7 +3456,18 @@ function parseError(err) {
     return '❌ 연결이 끊어졌습니다.<br><br>연결 화면의 <strong>[지갑 연결하기]</strong> 버튼으로 다시 연결한 뒤 시도해주세요.';
   }
   if (/wallet timeout/i.test(msg)) {
+    window._lastErrDiag.title = '지갑에서 서명 거절/시간 초과';
     return '❌ Trust Wallet이 서명 창을 띄우지 못했습니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. Play 스토어(앱스토어)에서 Trust Wallet 업데이트 확인<br>3. 다시 시도<br><br>반복되면 아래 [오류 정보 복사]로 카카오 문의해주세요.';
+  }
+  // 네트워크가 폴리곤이 아님 (ensurePolygonNetwork 실패 — 안내문이 이미 한국어로 작성돼 있음)
+  if (msg.includes('폴리곤(Polygon)으로 확인하지 못했습니다')) {
+    window._lastErrDiag.title = '네트워크가 폴리곤이 아님';
+    return msg;
+  }
+  // 수수료 코인(POL) 부족 — "insufficient funds"는 수수료용 기본 코인 부족을 뜻한다 (토큰 부족과 별개)
+  if (/insufficient funds/i.test(msg)) {
+    window._lastErrDiag.title = '수수료 코인(POL) 부족';
+    return '앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자라서 멈춘 것입니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br><strong>해결:</strong> 거래소에서 POL을 1,000원어치 정도 구매해 내 지갑 주소(폴리곤 네트워크)로 보낸 뒤 다시 시도해주세요. 한 번 충전하면 수십 번 거래할 수 있습니다.';
   }
   if (/below minimum|underpriced|tip cap/i.test(msg)) {
     return '❌ 네트워크 수수료 기준이 일시적으로 높아졌습니다. 잠시 후 다시 시도해주세요.';
@@ -3458,7 +3475,6 @@ function parseError(err) {
 
   const map = {
     // ── 가스·잔액 ──
-    'insufficient funds':      '❌ 가스비(POL)가 부족합니다. 지갑에 POL을 충전 후 다시 시도해주세요.',
     'insufficient':            '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.',
     'gas':                     '❌ 가스비 오류입니다. POL 잔액을 확인하거나 잠시 후 다시 시도해주세요.',
     // ── 네트워크 ──
