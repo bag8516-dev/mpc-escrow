@@ -670,6 +670,24 @@ function installApp() {
 <script>
 'use strict';
 
+// ── 가짜(복제) 사이트 자가 감지 ───────────────────────────────────────────
+// 이 코드가 공식 주소가 아닌 곳에서 실행되면 = 누군가 앱을 복제해 올린 것.
+// 회원이 입력·서명을 하기 전에 전면 경고로 차단한다. (로컬 개발 환경은 예외)
+(function () {
+  const OFFICIAL_HOST = 'bag8516-dev.github.io';
+  const h = location.hostname;
+  if (h === OFFICIAL_HOST || h === 'localhost' || h === '127.0.0.1' || h === '') return;
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.innerHTML =
+      '<div style="position:fixed;inset:0;z-index:9999;background:#2a0a0a;color:#ffd9d9;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center">' +
+      '<div style="max-width:420px"><div style="font-size:40px;margin-bottom:12px">⚠️</div>' +
+      '<div style="font-size:20px;font-weight:800;margin-bottom:12px">가짜 사이트입니다</div>' +
+      '<div style="font-size:14px;line-height:1.7">지금 보고 계신 주소(' + h + ')는 MPC 에스크로 공식 사이트가 아닙니다.<br>' +
+      '절대 지갑을 연결하거나 서명하지 마세요.<br><br>공식 주소:<br>' +
+      '<strong style="font-family:monospace;font-size:15px;color:#fff">bag8516-dev.github.io/mpc-escrow</strong></div></div></div>';
+  });
+})();
+
 // ── 설정 ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   // ★ 배포 후 아래 주소를 실제 프록시 주소로 교체하세요 ★
@@ -700,7 +718,7 @@ const CONFIG = {
 
   WC_PROJECT_ID: '3bb27596d90984a0f485530e30b44cba',
   KAKAO_CHANNEL: 'http://pf.kakao.com/_HCKbX',
-  OFFICIAL_URL:  window.location.hostname,
+  OFFICIAL_URL:  'bag8516-dev.github.io/mpc-escrow', // 고정값 — 접속 주소를 그대로 보여주면 복제(피싱) 사이트에서 가짜 주소가 '공식'으로 표시되는 허점이 있음 (2026-10 수정)
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MIN_MPC:       100,
   MAX_MPC:       100000,
@@ -801,7 +819,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100819';
+const APP_VERSION = '2026100820';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3321,8 +3339,9 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
     s.onerror = function() { if (fallback) loadEthers(fallback); };
     document.head.appendChild(s);
   }
+  // 우리 서버 내장본 우선 (CDN 장애·변조 영향 차단), 실패 시에만 외부 CDN
   loadEthers(
-    'https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js',
+    'vendor/ethers-5.7.2.umd.min.js',
     'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js'
   );
 })();
