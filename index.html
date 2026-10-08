@@ -819,7 +819,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100820';
+const APP_VERSION = '2026100821';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1226,7 +1226,7 @@ function initContractsEthers() {
 const PUSH_CFG = {
   URL: 'https://idqnxrwrnisxjbovvpli.supabase.co',
   KEY: 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh',
-  VAPID: 'BFInIayGaKGQotz3FzQ7ZZ96g0FLVezY6PIvzNujD8kUAeBp56Kh24h8MOODcRZuu4JPK_1IgOw7qvuh328qciI',
+  VAPID: 'BCNONo7fUbako3kKs8zuUNMC9isdlvqPJ0TCBq1Cu0xqZ7iTWdAzA8ZERr1Li8WuPcYeflulD2q-1rpg5ovvTz4', // 2026-10-10 재발급 (구 열쇠 짝 불일치로 교체)
 };
 function pushB64ToU8(b) {
   const pad = '='.repeat((4 - b.length % 4) % 4);
