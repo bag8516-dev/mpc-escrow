@@ -819,7 +819,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100822';
+const APP_VERSION = '2026100823';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1300,6 +1300,34 @@ async function togglePush() {
   }
 }
 
+// 알림을 켜둔 기기: 등록된 구독이 현재 서명 열쇠와 다르면 조용히 새로 등록 (열쇠 교체 자가 치유, 2026-10)
+async function ensureFreshPushSub() {
+  try {
+    if (localStorage.getItem('esc_push_on') !== '1' || Notification.permission !== 'granted' || !walletAddress) return;
+    const reg = await navigator.serviceWorker.ready;
+    const cur = await reg.pushManager.getSubscription();
+    const want = pushB64ToU8(PUSH_CFG.VAPID);
+    let same = false;
+    if (cur && cur.options && cur.options.applicationServerKey) {
+      const have = new Uint8Array(cur.options.applicationServerKey);
+      same = have.length === want.length && have.every((v, i) => v === want[i]);
+    }
+    if (same) return;
+    const oldEndpoint = cur ? cur.endpoint : null;
+    if (cur) { try { await cur.unsubscribe(); } catch {} }
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
+    const j = sub.toJSON();
+    const hdr = { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' };
+    await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_save_push', { method: 'POST', headers: hdr,
+      body: JSON.stringify({ p_wallet: walletAddress, p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth }) });
+    if (oldEndpoint && oldEndpoint !== sub.endpoint) {
+      fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_del_push', { method: 'POST', headers: hdr,
+        body: JSON.stringify({ p_endpoint: oldEndpoint }) }).catch(() => {});
+    }
+    showToast('🔔 알림 등록을 최신 상태로 갱신했습니다');
+  } catch {}
+}
+
 function onWalletConnected() {
   // 헤더 표시
   document.getElementById('mainHeader').style.display = 'flex';
@@ -1325,8 +1353,8 @@ function onWalletConnected() {
   // 거래 목록 갱신
   loadUserTrades();
 
-  // 알림 버튼 표시 (지원 환경에서만)
-  try { if (pushSupported()) renderPushBtn(); } catch {}
+  // 알림 버튼 표시 (지원 환경에서만) + 열쇠가 바뀐 경우 자동 재등록
+  try { if (pushSupported()) { renderPushBtn(); ensureFreshPushSub(); } } catch {}
 
   // 계정/네트워크 변경 감지 (window.ethereum 이벤트로 처리됨)
 }
