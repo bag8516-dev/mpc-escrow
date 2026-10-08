@@ -105,6 +105,16 @@ const num = v => Number(ethers.formatUnits(v, 18));
     if (locked === bal) console.log(`장부: 일치 ✅ (잠긴 ${lockedStr} = 잔액 ${balStr})`);
     else { console.log(`⚠️ 장부 불일치! 잠긴 ${lockedStr} vs 잔액 ${balStr} — 최우선 확인 필요`); fail = true; }
 
+    // 검증 결과를 앱 신뢰 배지용으로 기록 (비밀값 검증 — 외부 위조 불가)
+    try {
+      const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/rest/v1/rpc/esc_audit_set', {
+        method: 'POST',
+        headers: { apikey: 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', Authorization: 'Bearer sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_key: '15e3369ce1c8ebd3d9236919', p_ok: locked === bal, p_locked: num(locked) }),
+      });
+      console.log((await r.text()).includes('ok') ? '신뢰 배지: 기록 완료' : '⚠️ 신뢰 배지 기록 실패');
+    } catch (e) { console.log('⚠️ 신뢰 배지 기록 실패:', e.message); }
+
     const usdtBal = await new ethers.Contract(USDT, erc, p).balanceOf(PROXY, { blockTag: M });
     if (usdtBal !== 0n) { console.log(`⚠️ USDT 잔액 0 아님: ${ethers.formatUnits(usdtBal, 6)} — 비정상 (자동 즉시교환 구조)`); fail = true; }
 
