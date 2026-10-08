@@ -819,7 +819,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100821';
+const APP_VERSION = '2026100822';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1281,7 +1281,9 @@ async function togglePush() {
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') return;
     }
-    let sub = cur || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushB64ToU8(PUSH_CFG.VAPID) });
+    // 기존 구독은 재사용하지 않고 항상 새로 등록 (서명 열쇠가 교체돼도 어긋나지 않게, 2026-10)
+    if (cur) { try { await cur.unsubscribe(); } catch {} }
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushB64ToU8(PUSH_CFG.VAPID) });
     const j = sub.toJSON();
     const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_save_push', {
       method: 'POST',
