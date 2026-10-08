@@ -219,6 +219,20 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
 
 <script>
 // ── 설정 ────────────────────────────────────────────────────────────────────
+// ── 가짜(복제) 사이트 자가 감지 (회원용 앱과 동일, 2026-10) ──
+(function () {
+  const OFFICIAL_HOST = 'bag8516-dev.github.io';
+  const h = location.hostname;
+  if (h === OFFICIAL_HOST || h === 'localhost' || h === '127.0.0.1' || h === '') return;
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.innerHTML =
+      '<div style="position:fixed;inset:0;z-index:9999;background:#2a0a0a;color:#ffd9d9;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center">' +
+      '<div style="max-width:420px"><div style="font-size:40px;margin-bottom:12px">⚠️</div>' +
+      '<div style="font-size:20px;font-weight:800;margin-bottom:12px">가짜 사이트입니다</div>' +
+      '<div style="font-size:14px;line-height:1.7">이 주소(' + h + ')는 공식 관리자 페이지가 아닙니다.<br>지갑을 연결하지 마세요.</div></div></div>';
+  });
+})();
+
 const ADMIN_CONFIG = {
   CHAIN_ID:    137,
   WC_PROJECT_ID: '3bb27596d90984a0f485530e30b44cba',
