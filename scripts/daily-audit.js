@@ -141,6 +141,17 @@ const num = v => Number(ethers.formatUnits(v, 18));
     fail = true;
   }
 
+  // ── 보안 채팅방 서버 깨우기 (무료 플랜은 7일 미사용 시 자동 정지 → 매일 가벼운 호출로 방지) ──
+  try {
+    const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/rest/v1/rpc/feed', {
+      method: 'POST',
+      headers: { apikey: 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', Authorization: 'Bearer sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    console.log(r.ok ? '채팅방 서버: 정상 (깨우기 완료)' : `⚠️ 채팅방 서버 응답 이상: HTTP ${r.status}`);
+    if (!r.ok) fail = true;
+  } catch (e) { console.log('⚠️ 채팅방 서버 접속 실패:', e.message); fail = true; }
+
   console.log(fail ? '결과: ⚠️ 이상 항목 있음 — 위 내용 확인 필요' : '결과: ✅ 전체 정상');
   process.exit(fail ? 2 : 0);
 })();
