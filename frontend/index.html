@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100817';
+const APP_VERSION = '2026100818';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -905,16 +905,21 @@ function showTwBlockOverlay() {
 
 async function twNodeHealthCheck() {
   if (typeof window.ethereum === 'undefined') return; // TW 브라우저 아님
-  if (isTwNodeBad()) { showTwBlockOverlay(); return; } // 이미 문제 기기로 기억됨 → 전체 화면 안내
+  const wasBad = isTwNodeBad();
   try {
     // 지갑 노드에 가벼운 읽기 요청 — 8초 내 응답 없거나 401 계열이면 문제 기기로 기록
     await Promise.race([
       window.ethereum.request({ method: 'eth_blockNumber' }),
       sleep(8000).then(() => { throw new Error('health timeout'); }),
     ]);
+    // 정상 응답: 과거에 잘못 찍힌 낙인이 있으면 지움 (일시 장애로 멀쩡한 기기에 경고가 반복되던 문제 수정, 2026-10)
+    if (wasBad) { try { localStorage.removeItem(TW_BAD_KEY); } catch {} }
   } catch (e) {
     const msg = String(e?.message || e);
-    if (/401|403|429|HTTP|timeout|network|Java exception/i.test(msg)) markTwNodeBad();
+    if (/401|403|429|HTTP|timeout|network|Java exception/i.test(msg)) {
+      if (wasBad) showTwBlockOverlay(); // 두 번 이상 연속 실패한 기기만 전체 화면 안내
+      else markTwNodeBad();             // 첫 실패는 기록 + 작은 배너만
+    }
   }
 }
 
