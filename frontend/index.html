@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100813';
+const APP_VERSION = '2026100814';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2020,6 +2020,15 @@ async function checkTradeAlerts() {
       t.status === 'PENDING' && t.createdAt && now - t.createdAt > CONFIG.TRADE_TIMEOUT * 1000);
     const showReturn = needReturn.length > 0 && !window._returnAlertShown;
 
+    // 만료 3시간 전 거래 (아직 안 팔렸고 곧 만료되는 내 판매글)
+    const expSoon = mine.filter(t =>
+      t.status === 'PENDING' && t.createdAt &&
+      now - t.createdAt <= CONFIG.TRADE_TIMEOUT * 1000 &&
+      now - t.createdAt >  (CONFIG.TRADE_TIMEOUT - 3 * 3600) * 1000);
+
+    // 상단 고정 배너 (닫기 전까지 유지 — 1회성 알림창과 별개)
+    renderActionBanner(needReturn, expSoon);
+
     if (newDone.length === 0 && !showReturn) return;
 
     let html = '';
@@ -2054,6 +2063,32 @@ async function checkTradeAlerts() {
   } catch { /* 알림 실패는 기능에 영향 없음 */ }
 }
 
+// ── 상단 고정 행동 배너: 반환 대기 / 만료 임박 (접속해 있는 동안 계속 보임) ──
+function renderActionBanner(needReturn, expSoon) {
+  const old = document.getElementById('actionBanner');
+  if (old) old.remove();
+  if ((!needReturn || !needReturn.length) && (!expSoon || !expSoon.length)) return;
+  const bar = document.createElement('div');
+  bar.id = 'actionBanner';
+  bar.style.cssText = 'position:sticky;top:0;z-index:350;background:#2a2200;border-bottom:1px solid var(--gold);padding:10px 14px;font-size:13px;line-height:1.6;color:#ffe9b0';
+  let html = '';
+  if (needReturn && needReturn.length) {
+    const mpc = needReturn.reduce((s, t) => s + (t.mpcAmt || 0), 0);
+    html += `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span style="flex:1">⏰ <strong>반환 대기 ${needReturn.length}건</strong> (${mpc.toLocaleString()} MPC) — 만료된 판매글의 MPC가 기다리고 있습니다.</span>
+      <button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="showTab('status')">지금 찾아가기</button></div>`;
+  }
+  if (expSoon && expSoon.length) {
+    const soonest = Math.min(...expSoon.map(t => t.createdAt + CONFIG.TRADE_TIMEOUT * 1000));
+    const remainH = Math.max(0, (soonest - Date.now()) / 3600000);
+    const remainTxt = remainH >= 1 ? Math.floor(remainH) + '시간' : Math.max(1, Math.round(remainH * 60)) + '분';
+    html += `<div style="margin-top:${needReturn && needReturn.length ? '6px' : '0'}">
+      ⏳ 판매글 ${expSoon.length}건이 <strong>약 ${remainTxt} 후 만료</strong>됩니다. 만료되면 [진행 중] 탭에서 반환 버튼으로 찾아가시면 됩니다.</div>`;
+  }
+  bar.innerHTML = html;
+  document.body.prepend(bar);
+}
+
 async function recoverTradesFromChain() {
   try {
     // 조회는 공용 RPC 우선 (지갑 노드 401 시 내역 복구가 조용히 실패하는 것 방지)
@@ -2067,12 +2102,18 @@ async function recoverTradesFromChain() {
     const local = getLocalTrades();
     let changed = false;
 
-    for (const tradeId of tradeIds) {
-      // 이미 로컬에 있으면 skip
-      if (local[tradeId]) continue;
+    // 체인 조회를 10건씩 병렬로 (순차 조회 시 50건에 20초 이상 걸리던 것 단축, 2026-10)
+    const toFetch = tradeIds.filter(id => !local[id]);
+    const fetched = new Map();
+    for (let i = 0; i < toFetch.length; i += 10) {
+      const batch = toFetch.slice(i, i + 10);
+      const results = await Promise.all(batch.map(id => rc.getTrade(id).catch(() => null)));
+      batch.forEach((id, k) => { if (results[k]) fetched.set(id, results[k]); });
+    }
 
-      // 체인에서 거래 정보 가져오기
-      const t = await rc.getTrade(tradeId);
+    for (const tradeId of toFetch) {
+      const t = fetched.get(tradeId);
+      if (!t) continue;
       const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
       const status = statusArr[Number(t.status)] || 'NONE';
       if (status === 'NONE' || status === 'COMMITTED') continue;
@@ -2113,6 +2154,9 @@ async function recoverTradesFromChain() {
 async function fetchMarketLogs(fromBlock, toBlock, topics) {
   const filter = { address: CONFIG.ESCROW_PROXY, topics: [topics] };
   const strategies = [
+    async (lp) => { // ⓪ 전체 범위 한 번에 (전용 노드용 — 2026-10. 공용 노드는 범위 제한으로 즉시 실패 후 ①로)
+      return await lp.getLogs({ ...filter, fromBlock, toBlock });
+    },
     async (lp) => { // ① 9,500블록씩 동시 조회 (QuickNode 1만 블록 제한 준수, 2026-07 정책 변경)
       const ranges = [];
       for (let f = fromBlock; f <= toBlock; f += 9500) ranges.push([f, Math.min(f + 9499, toBlock)]);
