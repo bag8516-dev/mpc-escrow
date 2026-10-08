@@ -231,6 +231,7 @@ const ADMIN_CONFIG = {
     '0xF07ab48453B4f97cC15966a6F06F815399ea00c1',
   ],
   RPC_FALLBACKS: [
+    'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (2026-10, 1순위)
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',
     'https://polygon.drpc.org',
@@ -433,7 +434,7 @@ async function connectAdminViaWC() {
       adminWcProvider = await WCEP.init({
         projectId: ADMIN_CONFIG.WC_PROJECT_ID,
         chains: [ADMIN_CONFIG.CHAIN_ID],
-        rpcMap: { [ADMIN_CONFIG.CHAIN_ID]: 'https://rpc-mainnet.matic.quiknode.pro' },
+        rpcMap: { [ADMIN_CONFIG.CHAIN_ID]: ADMIN_CONFIG.RPC_FALLBACKS[0] },
         showQrModal: false,
         metadata: { name: 'MPC 에스크로 관리자', description: '관리자 페이지', url: location.origin, icons: [location.origin + '/mpc-escrow/icon-192.png'] },
       });

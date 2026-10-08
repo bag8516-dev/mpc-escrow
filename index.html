@@ -680,12 +680,12 @@ const CONFIG = {
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
   CHAIN_ID:      137,
   CHAIN_NAME:    'Polygon',
-  RPC_URL:       'https://polygon-bor-rpc.publicnode.com',
+  RPC_URL:       'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (2026-10 도입, 무료 한도 일 300만)
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
+  // 2026-10: Infura 전용 노드를 1순위로 — 공용 노드 상태에 따른 401/429/지연 오류 구조적 제거
   RPC_FALLBACKS: [
-    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능 (장터 1순위)
-    // 주의: 전용 엔드포인트(icy-green-pallet)는 도메인 제한(referrer)이 걸려 브라우저 밖 요청 시 401 →
-    //       앱 조회 경로에서 제거 (referrer가 없는 fetch/트랜잭션 준비 조회에서 오류 유발)
+    'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (1순위)
+    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
     'https://1rpc.io/matic',
@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072721';
+const APP_VERSION = '2026100813';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1021,6 +1021,14 @@ async function connectWallet() {
       await connectViaWalletConnect(btn);
       return;
     }
+    // 스마트 라우팅 (2026-10): 안드로이드 16 이상은 Trust Wallet 내장 브라우저에서
+    // 서명창이 안 뜨는 문제가 확인된 기종 → 내장 브라우저로 보내지 않고
+    // 처음부터 WalletConnect(예비 연결) 경로로 같은 Trust Wallet 앱에 연결
+    const andVer = navigator.userAgent.match(/Android (\d+)/);
+    if (andVer && parseInt(andVer[1], 10) >= 16) {
+      await connectViaWalletConnect(btn);
+      return;
+    }
     // 일반 브라우저·카카오톡 등 (Trust Wallet 밖): Trust Wallet 내장 브라우저로 이어서 진행
     // → 연결·서명이 전부 Trust Wallet 안에서 팝업으로 처리되어 앱 왕복이 없음
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -1068,7 +1076,7 @@ async function connectViaWalletConnect(btn) {
       wcProvider = await WCEP.init({
         projectId: CONFIG.WC_PROJECT_ID,
         chains: [CONFIG.CHAIN_ID],
-        rpcMap: { [CONFIG.CHAIN_ID]: 'https://rpc-mainnet.matic.quiknode.pro' }, // 조회·가스추정용 RPC (기본 WC RPC 불안정 대비)
+        rpcMap: { [CONFIG.CHAIN_ID]: CONFIG.RPC_URL }, // 조회·가스추정용 RPC — 전용 노드 사용 (기본 WC RPC 불안정 대비)
         showQrModal: false,
         metadata: {
           name: 'MPC 에스크로',
