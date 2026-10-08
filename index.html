@@ -488,6 +488,9 @@ function installApp() {
       <button class="btn btn-primary" onclick="showTab('sell')">➕ 내 MPC 판매 글 올리기</button>
     </div>
 
+    <!-- 신뢰 배지: 매일 아침 자동 장부 검증 결과 (2026-10) -->
+    <div id="auditBadge" style="display:none;margin:12px 16px 0;background:#102a18;border:1px solid #2e5c3a;border-radius:10px;padding:9px 12px;font-size:12px;color:#8fdba8"></div>
+
     <!-- 매수 희망 게시판 (2026-10): 사는 쪽 수요가 보이게 -->
     <div style="margin:14px 16px 0;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -830,7 +833,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100829';
+const APP_VERSION = '2026100830';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -962,6 +965,7 @@ async function twNodeHealthCheck() {
 document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
   loadBuyWishes();   // 매수 희망 목록 (장터 배지·판매 힌트용)
+  loadAuditBadge();  // 장부 검증 신뢰 배지
   // 모바일 전체: 연결 모듈을 접속하자마자 미리 받아둠 (첫 탭에 바로 연결되게, 2026-10 개편)
   try {
     if (/Android|iPhone|iPad/i.test(navigator.userAgent) && typeof window.ethereum === 'undefined') loadWcLib().catch(() => {});
@@ -1379,6 +1383,29 @@ async function loadBuyWishes() {
         + '</div>';
     }).join('');
   } catch { el.innerHTML = '<div style="color:var(--text3);padding:6px 0">목록을 불러오지 못했습니다. 새로고침 해주세요.</div>'; }
+}
+
+// 신뢰 배지: 매일 아침 자동 장부 검증(잠긴 수량=보관 수량) 결과 표시 (2026-10)
+async function loadAuditBadge() {
+  try {
+    const el = document.getElementById('auditBadge');
+    if (!el) return;
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_audit_get', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const rows = await r.json();
+    const a = Array.isArray(rows) ? rows[0] : null;
+    if (!a || !a.ok) return; // 검증 실패·기록 없음 → 배지 미표시 (거짓 안심 금지)
+    const ageH = (Date.now() - new Date(a.checked_at).getTime()) / 3600000;
+    if (ageH > 36) return;   // 하루 반 넘게 오래된 기록이면 미표시
+    const d = new Date(a.checked_at);
+    el.textContent = '🛡️ 장부 검증 완료 (' + (d.getMonth() + 1) + '/' + d.getDate()
+      + ') — 예치된 ' + Math.round(Number(a.locked)).toLocaleString()
+      + ' MPC가 컨트랙트에 그대로 보관되어 있음을 매일 자동 확인합니다';
+    el.style.display = 'block';
+  } catch {}
 }
 
 // 판매 설정 화면 상단에 "현재 최고 매수 희망가" 힌트 표시 (매수-판매 연결, 2026-10)
