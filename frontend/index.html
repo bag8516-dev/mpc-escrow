@@ -486,6 +486,16 @@ function installApp() {
     <div style="padding:12px 16px 0">
       <button class="btn btn-primary" onclick="showTab('sell')">➕ 내 MPC 판매 글 올리기</button>
     </div>
+
+    <!-- 매수 희망 게시판 (2026-10): 사는 쪽 수요가 보이게 -->
+    <div style="margin:14px 16px 0;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-weight:800;font-size:14px;color:var(--gold)">💰 매수 희망</div>
+        <button class="btn btn-sm btn-outline" onclick="openWishForm()">내 매수 희망 등록</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">"이 가격에 이만큼 사고 싶다"는 등록입니다. 판매자는 이 가격을 참고해 판매 글을 올리세요.</div>
+      <div id="buyWishList" style="font-size:13px;color:var(--text2)">불러오는 중...</div>
+    </div>
     <div style="padding:10px 16px 0;display:flex;gap:8px">
       <button class="btn btn-sm btn-ghost" id="mktSortNew" onclick="setMarketSort('new')" style="flex:1;border:1px solid var(--gold)">🕐 최신순</button>
       <button class="btn btn-sm btn-ghost" id="mktSortPrice" onclick="setMarketSort('price')" style="flex:1;border:1px solid var(--border)">💰 낮은 가격순</button>
@@ -819,7 +829,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100826';
+const APP_VERSION = '2026100827';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1332,6 +1342,88 @@ async function ensureFreshPushSub() {
         body: JSON.stringify({ p_endpoint: oldEndpoint }) }).catch(() => {});
     }
     showToast('🔔 알림 등록을 최신 상태로 갱신했습니다');
+  } catch {}
+}
+
+// ── 매수 희망 게시판 ───────────────────────────────────────────────────────
+async function loadBuyWishes() {
+  const el = document.getElementById('buyWishList');
+  if (!el) return;
+  try {
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_list', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      el.innerHTML = '<div style="color:var(--text3);padding:6px 0">아직 등록된 매수 희망이 없습니다. 첫 번째로 등록해보세요.</div>';
+      return;
+    }
+    const mine = walletAddress ? walletAddress.toLowerCase() : null;
+    el.innerHTML = rows.map(w => {
+      const isMine = mine && w.wallet === mine;
+      const total = Math.round(w.mpc * w.price_krw);
+      const d = new Date(w.updated_at);
+      const dateTxt = (d.getMonth() + 1) + '/' + d.getDate();
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border)">'
+        + '<div style="flex:1"><strong>' + Number(w.mpc).toLocaleString() + ' MPC</strong>'
+        + ' · 개당 <strong style="color:var(--gold)">' + Number(w.price_krw).toLocaleString() + '원</strong>'
+        + '<div style="font-size:11px;color:var(--text3)">총 ' + total.toLocaleString() + '원 · ' + w.wallet.slice(0, 6) + '…' + w.wallet.slice(-4) + ' · ' + dateTxt + (isMine ? ' · <span style="color:var(--gold)">내 등록</span>' : '') + '</div></div>'
+        + (isMine ? '<button class="btn btn-sm btn-outline" onclick="deleteWish()">삭제</button>'
+                  : '<button class="btn btn-sm btn-primary" onclick="showTab(\'sell\')">판매하기</button>')
+        + '</div>';
+    }).join('');
+  } catch { el.innerHTML = '<div style="color:var(--text3);padding:6px 0">목록을 불러오지 못했습니다. 새로고침 해주세요.</div>'; }
+}
+
+function openWishForm() {
+  if (!requireWallet()) return;
+  if (document.getElementById('wishFormOv')) return;
+  const ov = document.createElement('div');
+  ov.id = 'wishFormOv';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(10,15,30,.85);display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML = '<div style="max-width:360px;width:100%;background:var(--card2);border:1px solid var(--gold);border-radius:14px;padding:20px">'
+    + '<div style="font-size:16px;font-weight:800;color:var(--gold);margin-bottom:12px">💰 매수 희망 등록</div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:12px">지갑당 1건이며, 다시 등록하면 덮어씁니다. 30일 뒤 자동으로 내려갑니다.</div>'
+    + '<label style="font-size:12px;color:var(--text2)">희망 수량 (MPC)</label>'
+    + '<input id="wishMpc" type="number" inputmode="numeric" min="100" placeholder="예: 10000" style="width:100%;margin:4px 0 10px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
+    + '<label style="font-size:12px;color:var(--text2)">개당 희망가 (원)</label>'
+    + '<input id="wishPrice" type="number" inputmode="decimal" min="1" step="0.1" placeholder="예: 500" style="width:100%;margin:4px 0 14px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
+    + '<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveWish()">등록</button>'
+    + '<button class="btn btn-outline" style="width:100%" onclick="document.getElementById(\'wishFormOv\').remove()">취소</button></div>';
+  document.body.appendChild(ov);
+}
+
+async function saveWish() {
+  try {
+    const mpc = Number(document.getElementById('wishMpc').value);
+    const price = Number(document.getElementById('wishPrice').value);
+    if (!mpc || mpc < 100) { showToast('수량은 100 MPC 이상으로 입력해주세요'); return; }
+    if (!price || price <= 0) { showToast('개당 희망가를 입력해주세요'); return; }
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_set', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_wallet: walletAddress, p_mpc: mpc, p_price: price }),
+    });
+    const t = await r.text();
+    if (!r.ok || t.indexOf('ok') === -1) throw new Error('등록 실패: 잠시 후 다시 시도해주세요');
+    const ov = document.getElementById('wishFormOv'); if (ov) ov.remove();
+    showToast('✅ 매수 희망이 등록됐습니다');
+    loadBuyWishes();
+  } catch (e) { showToast(String(e && e.message || '등록에 실패했습니다'), 4000); }
+}
+
+async function deleteWish() {
+  try {
+    if (!walletAddress) return;
+    await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_del', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_wallet: walletAddress }),
+    });
+    showToast('매수 희망을 내렸습니다');
+    loadBuyWishes();
   } catch {}
 }
 
@@ -2363,6 +2455,7 @@ function marketItemsFromCache(cache) {
 
 // ── 장터 (매도 목록) ──────────────────────────────────────────────────────
 async function loadMarket() {
+  loadBuyWishes(); // 매수 희망 목록도 함께 갱신 (장터 진입·새로고침 시)
   const el = document.getElementById('marketList');
   const btn = document.getElementById('btnMarketRefresh');
   if (!el) return;
