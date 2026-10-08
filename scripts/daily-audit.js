@@ -11,6 +11,13 @@ const fs = require('fs');
 const path = require('path');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// ⚠️ 줄만 모아 두었다가, 이상이 있으면 운영자 폰으로 푸시 발송 (맨 아래)
+const issues = [];
+{
+  const orig = console.log.bind(console);
+  console.log = (...a) => { const s = a.join(' '); if (s.includes('⚠️')) issues.push(s.replace(/⚠️\s*/, '')); orig(...a); };
+}
+
 const RPC_MAIN = 'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1'; // 전용 노드 (2026-10)
 const RPC_FALLBACK = 'https://rpc-mainnet.matic.quiknode.pro';
 const PROXY = '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972';
@@ -60,6 +67,15 @@ const num = v => Number(ethers.formatUnits(v, 18));
   try {
     const N = await p.getBlockNumber();   // 기준 블록 — 모든 수치를 이 시점으로 맞춘다
 
+    // 이어읽기 저장소: 한 번 읽은 이벤트·블록시각은 파일에 쌓아두고 새 블록만 조회 (10분 → 수 초)
+    // 체인 재구성 대비로 최신 1,000블록은 저장하지 않고 다음에 다시 읽는다
+    const CACHE = path.join(__dirname, 'audit-cache.json');
+    let cache = { cursor: DEPLOY_BLOCK - 1, logs: [], ts: {} };
+    try {
+      const c = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
+      if (c && typeof c.cursor === 'number' && c.cursor >= DEPLOY_BLOCK - 1 && Array.isArray(c.logs)) cache = c;
+    } catch {} // 파일 없음/손상 → 처음부터 전체 스캔 (느릴 뿐 결과는 동일)
+
     async function scan(label, filter, from, to) {
       const out = [];
       for (let f = from; f <= to; f += 9500) {
@@ -74,8 +90,11 @@ const num = v => Number(ethers.formatUnits(v, 18));
       return out;
     }
 
-    // 에스크로 이벤트 전체를 한 번만 스캔 → 등록/종료를 로그만으로 재구성
-    const evLogs = await scan('에스크로 이벤트', { address: PROXY }, DEPLOY_BLOCK, N);
+    // 에스크로 이벤트: 저장분 + 새 구간만 스캔 → 등록/종료를 로그만으로 재구성
+    const newLogs = cache.cursor < N
+      ? await scan('에스크로 이벤트', { address: PROXY }, cache.cursor + 1, N)
+      : [];
+    const evLogs = [...cache.logs, ...newLogs];
     const openTrades = new Map();   // tradeId → { amount, block }  (아직 안 끝난 거래)
     let revealed = 0, done = 0;
     for (const l of evLogs) {
@@ -120,7 +139,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
 
     // 진행 중 거래만 블록 시각을 조회해 판매 중 / 반환 대기 구분 (createdAt = 예치 블록 시각)
     const nowTs = (await p.getBlock(M)).timestamp;
-    const tsCache = new Map();
+    const tsCache = new Map(Object.entries(cache.ts || {}).map(([k, v]) => [Number(k), v]));
     let act = 0, exp = 0, expM = 0;
     const expList = []; // 반환 대기 상세 (공지·개별 안내용)
     for (const t of openTrades.values()) {
@@ -146,6 +165,17 @@ const num = v => Number(ethers.formatUnits(v, 18));
         console.log(`  ${r.mpc.toLocaleString()} MPC | 판매자 ${r.seller.slice(0, 8)}…${r.seller.slice(-4)} | 만료 후 ${r.days}일`);
       if (expList.length > 12) console.log(`  …외 ${expList.length - 12}건`);
     }
+
+    // 이어읽기 저장: 확정 구간(N−1,000 이전)의 이벤트와 블록시각만 기록
+    try {
+      const SAFE = N - 1000;
+      fs.writeFileSync(CACHE, JSON.stringify({
+        cursor: SAFE,
+        logs: evLogs.filter(l => l.blockNumber <= SAFE)
+          .map(l => ({ topics: l.topics, data: l.data, blockNumber: l.blockNumber })),
+        ts: Object.fromEntries(tsCache),
+      }));
+    } catch (e) { console.log('이어읽기 저장 실패 (다음 점검은 전체 스캔):', e.message); }
   } catch (e) {
     console.log('⚠️ 장부 점검 측정 실패:', e.message, '— 0건이 아니라 측정 불가임');
     fail = true;
@@ -161,6 +191,36 @@ const num = v => Number(ethers.formatUnits(v, 18));
     console.log(r.ok ? '채팅방 서버: 정상 (깨우기 완료)' : `⚠️ 채팅방 서버 응답 이상: HTTP ${r.status}`);
     if (!r.ok) fail = true;
   } catch (e) { console.log('⚠️ 채팅방 서버 접속 실패:', e.message); fail = true; }
+
+  // ── 운영자 장애 알림: 이상 항목이 있으면 운영자 폰으로 즉시 푸시 ──
+  // (발견→확인 간격을 줄이는 용도. 수정은 사람이 승인 — 자동 수정은 하지 않는다)
+  if (fail && issues.length) {
+    try {
+      const webpush = require('web-push');
+      const keyFile = fs.readFileSync('C:/ssabom/appdata/mpc-vapid-keys.txt', 'utf8');
+      const pub = [...keyFile.matchAll(/VAPID_PUBLIC=(\S+)/g)].pop()[1];   // 파일의 마지막 쌍 = 현행 열쇠
+      const priv = [...keyFile.matchAll(/VAPID_PRIVATE=(\S+)/g)].pop()[1];
+      webpush.setVapidDetails('mailto:bag8516@gmail.com', pub, priv); // 실존 주소 필수 — 가짜면 애플만 403
+      const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/functions/v1/esc-push-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dump: true, key: '15e3369ce1c8ebd3d9236919' }),
+      });
+      const OPERATOR = '0xf07ab48453b4f97cc15966a6f06f815399ea00c1';
+      const subs = (((await r.json()).subs) || []).filter(s => s.wallet === OPERATOR);
+      const body = issues.slice(0, 3).join('\n').slice(0, 170);
+      let sent = 0;
+      for (const s of subs) {
+        try {
+          await webpush.sendNotification(
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+            JSON.stringify({ title: '🚨 에스크로 점검 이상', body }),
+          );
+          sent++;
+        } catch (e) { console.error('운영자 알림 개별 실패:', e.statusCode || e.message); }
+      }
+      console.log(sent ? `운영자 알림: 폰으로 발송 완료 (${sent}건)` : '운영자 알림: 발송 실패 — 구독 없음 또는 전송 오류');
+    } catch (e) { console.log('운영자 알림 발송 실패:', e.message); }
+  }
 
   console.log(fail ? '결과: ⚠️ 이상 항목 있음 — 위 내용 확인 필요' : '결과: ✅ 전체 정상');
   process.exit(fail ? 2 : 0);

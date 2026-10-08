@@ -3,3 +3,4 @@ artifacts/
 cache/
 .env
 deployed-*.json
+scripts/audit-cache.json
