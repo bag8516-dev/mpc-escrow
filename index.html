@@ -829,7 +829,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100827';
+const APP_VERSION = '2026100828';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1389,7 +1389,7 @@ function openWishForm() {
     + '<label style="font-size:12px;color:var(--text2)">희망 수량 (MPC)</label>'
     + '<input id="wishMpc" type="number" inputmode="numeric" min="100" placeholder="예: 10000" style="width:100%;margin:4px 0 10px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
     + '<label style="font-size:12px;color:var(--text2)">개당 희망가 (원)</label>'
-    + '<input id="wishPrice" type="number" inputmode="decimal" min="1" step="0.1" placeholder="예: 500" style="width:100%;margin:4px 0 14px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
+    + '<input id="wishPrice" type="number" inputmode="decimal" min="100" step="1" placeholder="예: 500 (최소 100원)" style="width:100%;margin:4px 0 14px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
     + '<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveWish()">등록</button>'
     + '<button class="btn btn-outline" style="width:100%" onclick="document.getElementById(\'wishFormOv\').remove()">취소</button></div>';
   document.body.appendChild(ov);
@@ -1400,7 +1400,7 @@ async function saveWish() {
     const mpc = Number(document.getElementById('wishMpc').value);
     const price = Number(document.getElementById('wishPrice').value);
     if (!mpc || mpc < 100) { showToast('수량은 100 MPC 이상으로 입력해주세요'); return; }
-    if (!price || price <= 0) { showToast('개당 희망가를 입력해주세요'); return; }
+    if (!price || price < 100) { showToast('개당 희망가는 100원 이상으로 입력해주세요'); return; }
     const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_set', {
       method: 'POST',
       headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
