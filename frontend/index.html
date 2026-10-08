@@ -802,7 +802,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100816';
+const APP_VERSION = '2026100817';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -921,6 +921,11 @@ async function twNodeHealthCheck() {
 // ── 초기화 ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
+  // 안드로이드 16+ : 연결에 쓸 모듈을 접속하자마자 미리 받아둠 (첫 탭에 바로 연결되게)
+  try {
+    const am = navigator.userAgent.match(/Android (\d+)/);
+    if (am && parseInt(am[1], 10) >= 16 && typeof window.ethereum === 'undefined') loadWcLib().catch(() => {});
+  } catch {}
   twNodeHealthCheck(); // TW 브라우저면 지갑 노드 자가진단 (백그라운드)
   document.getElementById('officialUrl').textContent = CONFIG.OFFICIAL_URL;
   detectEnvironment();
