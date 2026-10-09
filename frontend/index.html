@@ -834,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100902';
+const APP_VERSION = '2026100903';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3444,15 +3444,18 @@ function parseError(err) {
 
   // Trust Wallet 앱 자체 내부 오류 (안드로이드 Java 예외 등) — 지갑 앱 업데이트 필요
   if (/Java exception|onRequest|method invocation/i.test(msg)) {
+    window._lastErrDiag.title = '지갑 앱 자체 오류';
     return '❌ Trust Wallet 앱 자체 오류입니다. (저희 서비스 문제가 아닙니다)<br><br>1. Play 스토어(앱스토어)에서 <strong>Trust Wallet을 최신 버전으로 업데이트</strong><br>2. 휴대폰을 재시작<br>3. 다시 접속해서 시도<br><br>그래도 반복되면 카카오 문의를 이용해주세요.';
   }
   // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내 + 예비 연결 방식 제공
   if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
     if (typeof window.ethereum !== 'undefined') { try { markTwNodeBad(); } catch {} } // 문제 기기로 기억 → 다음부터 선제 배너
+    window._lastErrDiag.title = '지갑 앱 연결 불안정';
     return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>계속 반복되면 아래 버튼으로 <strong>예비 연결 방식</strong>을 사용해보세요. (Trust Wallet 앱의 문제 구간을 우회합니다)<br><br><button class="btn btn-sm btn-outline" style="width:100%" onclick="closeModal(\'modalError\');altConnectEntry()">🔁 예비 연결 방식으로 다시 연결</button>';
   }
   // 예비 연결(WalletConnect) 세션 오류 — 재연결 안내
   if (/session (expired|topic|not found)|proposal expired|pairing|relayer/i.test(msg)) {
+    window._lastErrDiag.title = '지갑 연결 끊김';
     return '❌ 연결이 끊어졌습니다.<br><br>연결 화면의 <strong>[지갑 연결하기]</strong> 버튼으로 다시 연결한 뒤 시도해주세요.';
   }
   if (/wallet timeout/i.test(msg)) {
@@ -3470,48 +3473,53 @@ function parseError(err) {
     return '앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자라서 멈춘 것입니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br>지갑에 POL을 충전한 후 다시 시도해주세요.';
   }
   if (/below minimum|underpriced|tip cap/i.test(msg)) {
+    window._lastErrDiag.title = '네트워크 수수료 일시 상승';
     return '❌ 네트워크 수수료 기준이 일시적으로 높아졌습니다. 잠시 후 다시 시도해주세요.';
   }
 
+  // 각 항목: [팝업 제목, 안내 본문]
   const map = {
     // ── 가스·잔액 ──
-    'insufficient':            '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.',
-    'gas':                     '❌ 가스비 오류입니다. POL 잔액을 확인하거나 잠시 후 다시 시도해주세요.',
+    'insufficient':            ['잔액 부족', '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.'],
+    'gas':                     ['수수료(가스) 오류', '❌ 가스비 오류입니다. POL 잔액을 확인하거나 잠시 후 다시 시도해주세요.'],
     // ── 네트워크 ──
-    'network':                 '❌ 네트워크 오류입니다. 인터넷 연결을 확인하고 다시 시도해주세요.',
-    'timeout':                 '❌ 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.',
-    'fetch':                   '❌ 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.',
+    'network':                 ['인터넷 연결 오류', '❌ 네트워크 오류입니다. 인터넷 연결을 확인하고 다시 시도해주세요.'],
+    'timeout':                 ['응답 시간 초과', '❌ 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.'],
+    'fetch':                   ['서버 연결 실패', '❌ 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.'],
     // ── 컨트랙트 revert (영어 원문 그대로 매핑) ──
-    'Trade expired':           '❌ 거래 시간이 만료됐습니다 (24시간 초과).\n판매자에게 새 링크를 요청하세요.',
-    'Trade not pending':       '❌ 이미 처리된 거래입니다.',
-    'Trade not active':        '❌ 거래가 활성 상태가 아닙니다.',
-    'Trade not found':         '❌ 거래를 찾을 수 없습니다. 링크를 다시 확인하세요.',
-    'Seller cannot be buyer':  '❌ 판매자 본인은 구매할 수 없습니다.',
-    'Buyer already set':       '❌ 이미 다른 구매자가 참여한 거래입니다. 판매자에게 문의하세요.',
-    'Too early':               '❌ 아직 거래 참여가 불가합니다. 잠시 후 다시 시도해주세요.',
-    'Only PENDING can expire': '❌ 이미 처리(반환/완료)된 거래입니다. 내역 탭에서 상태를 확인해주세요.',
-    'Cannot cancel':           '❌ 이미 처리(반환/완료)된 거래라 취소할 수 없습니다. 내역 탭에서 상태를 확인해주세요.',
-    'Not a participant':       '❌ 이 거래의 판매자 지갑이 아닙니다.<br><br>판매 글을 올렸던 지갑으로 Trust Wallet에서 지갑을 전환한 뒤 다시 시도해주세요.',
-    'Trade does not exist':    '❌ 거래를 찾을 수 없습니다. 링크가 올바른지 확인해주세요.',
-    'Not expired yet':         '❌ 아직 판매 시간(24시간)이 지나지 않았습니다. 만료 전에는 "거래 취소"로 MPC를 돌려받을 수 있습니다.',
-    'Exceeds 100k MPC limit':  '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.',
-    'MPC amount must be':      '❌ MPC 수량이 올바르지 않습니다.',
-    'Price must be':           '❌ 거래 단가가 올바르지 않습니다. 가격을 다시 입력해주세요.',
-    'Rate must be':            '❌ 환율이 올바르지 않습니다. 환율을 다시 입력해주세요.',
-    'MPC transfer failed':     '❌ MPC 전송에 실패했습니다. MPC 잔액과 Approve를 확인해주세요.',
-    'USDT transfer failed':    '❌ USDT 전송에 실패했습니다. USDT 잔액과 Approve를 확인해주세요.',
-    'MPC payout failed':       '❌ MPC 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.',
-    'USDT payout failed':      '❌ USDT 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.',
-    'MPC amount mismatch':     '❌ MPC 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.',
-    'USDT amount mismatch':    '❌ USDT 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.',
-    'Invalid reveal':          '❌ 거래 검증 실패입니다. 카카오 문의를 이용해주세요.',
-    'Commit already used':     '❌ 이미 사용된 거래 코드입니다. 새로 거래를 생성해주세요.',
-    'Reentrant call':          '❌ 중복 요청이 감지됐습니다. 잠시 후 다시 시도해주세요.',
-    'Seller only':             '❌ 판매자만 이 작업을 할 수 있습니다.',
-    'Multisig only':           '❌ 권한이 없습니다.',
+    'Trade expired':           ['거래 시간 만료', '❌ 거래 시간이 만료됐습니다 (24시간 초과).\n판매자에게 새 링크를 요청하세요.'],
+    'Trade not pending':       ['이미 처리된 거래', '❌ 이미 처리된 거래입니다.'],
+    'Trade not active':        ['거래 상태 오류', '❌ 거래가 활성 상태가 아닙니다.'],
+    'Trade not found':         ['거래를 찾을 수 없음', '❌ 거래를 찾을 수 없습니다. 링크를 다시 확인하세요.'],
+    'Seller cannot be buyer':  ['본인 글은 구매 불가', '❌ 판매자 본인은 구매할 수 없습니다.'],
+    'Buyer already set':       ['이미 구매자가 있는 거래', '❌ 이미 다른 구매자가 참여한 거래입니다. 판매자에게 문의하세요.'],
+    'Too early':               ['잠시 후 참여 가능', '❌ 아직 거래 참여가 불가합니다. 잠시 후 다시 시도해주세요.'],
+    'Only PENDING can expire': ['이미 처리된 거래', '❌ 이미 처리(반환/완료)된 거래입니다. 내역 탭에서 상태를 확인해주세요.'],
+    'Cannot cancel':           ['취소할 수 없는 거래', '❌ 이미 처리(반환/완료)된 거래라 취소할 수 없습니다. 내역 탭에서 상태를 확인해주세요.'],
+    'Not a participant':       ['판매자 지갑이 아님', '❌ 이 거래의 판매자 지갑이 아닙니다.<br><br>판매 글을 올렸던 지갑으로 Trust Wallet에서 지갑을 전환한 뒤 다시 시도해주세요.'],
+    'Trade does not exist':    ['거래를 찾을 수 없음', '❌ 거래를 찾을 수 없습니다. 링크가 올바른지 확인해주세요.'],
+    'Not expired yet':         ['아직 만료 전', '❌ 아직 판매 시간(24시간)이 지나지 않았습니다. 만료 전에는 "거래 취소"로 MPC를 돌려받을 수 있습니다.'],
+    'Exceeds 100k MPC limit':  ['거래 한도 초과', '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.'],
+    'MPC amount must be':      ['입력값 오류', '❌ MPC 수량이 올바르지 않습니다.'],
+    'Price must be':           ['입력값 오류', '❌ 거래 단가가 올바르지 않습니다. 가격을 다시 입력해주세요.'],
+    'Rate must be':            ['입력값 오류', '❌ 환율이 올바르지 않습니다. 환율을 다시 입력해주세요.'],
+    'MPC transfer failed':     ['MPC 전송 실패', '❌ MPC 전송에 실패했습니다. MPC 잔액과 Approve를 확인해주세요.'],
+    'USDT transfer failed':    ['USDT 전송 실패', '❌ USDT 전송에 실패했습니다. USDT 잔액과 Approve를 확인해주세요.'],
+    'MPC payout failed':       ['처리 오류 — 문의 필요', '❌ MPC 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.'],
+    'USDT payout failed':      ['처리 오류 — 문의 필요', '❌ USDT 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.'],
+    'MPC amount mismatch':     ['처리 오류 — 문의 필요', '❌ MPC 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.'],
+    'USDT amount mismatch':    ['처리 오류 — 문의 필요', '❌ USDT 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.'],
+    'Invalid reveal':          ['처리 오류 — 문의 필요', '❌ 거래 검증 실패입니다. 카카오 문의를 이용해주세요.'],
+    'Commit already used':     ['이미 사용된 거래 코드', '❌ 이미 사용된 거래 코드입니다. 새로 거래를 생성해주세요.'],
+    'Reentrant call':          ['중복 요청', '❌ 중복 요청이 감지됐습니다. 잠시 후 다시 시도해주세요.'],
+    'Seller only':             ['판매자 전용 기능', '❌ 판매자만 이 작업을 할 수 있습니다.'],
+    'Multisig only':           ['권한 없음', '❌ 권한이 없습니다.'],
   };
   for (const [key, val] of Object.entries(map)) {
-    if (msg.toLowerCase().includes(key.toLowerCase())) return val;
+    if (msg.toLowerCase().includes(key.toLowerCase())) {
+      window._lastErrDiag.title = val[0];
+      return val[1];
+    }
   }
   return `❌ 오류: ${msg}<br><br>문제가 반복되면 카카오 문의를 이용해주세요.`;
 }
