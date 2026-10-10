@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -845,7 +845,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101105';
+const APP_VERSION = '2026101106';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -978,7 +978,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
   loadBuyWishes();   // 매수 희망 목록 (장터 배지·판매 힌트용)
   loadAuditBadge();  // 장부 검증 신뢰 배지
-  loadMarketStats(); // 커뮤니티 시세판
+  // loadMarketStats(); // 커뮤니티 시세판 — 2026-10-11 사용자 요청으로 당분간 숨김 (주석 해제로 복구)
   // 모바일 전체: 연결 모듈을 접속하자마자 미리 받아둠 (첫 탭에 바로 연결되게, 2026-10 개편)
   try {
     if (/Android|iPhone|iPad/i.test(navigator.userAgent) && typeof window.ethereum === 'undefined') loadWcLib().catch(() => {});
