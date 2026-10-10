@@ -834,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026100904';
+const APP_VERSION = '2026101001';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1445,13 +1445,17 @@ async function saveWish() {
     const price = Number(document.getElementById('wishPrice').value);
     if (!mpc || mpc < 100) { showToast('수량은 100 MPC 이상으로 입력해주세요'); return; }
     if (!price || price < 100) { showToast('개당 희망가는 100원 이상으로 입력해주세요'); return; }
+    const tokKey = 'wishTok_' + walletAddress.toLowerCase();
     const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_set', {
       method: 'POST',
       headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_wallet: walletAddress, p_mpc: mpc, p_price: price }),
+      body: JSON.stringify({ p_wallet: walletAddress, p_mpc: mpc, p_price: price, p_token: (function(){ try { return localStorage.getItem(tokKey); } catch (_) { return null; } })() }),
     });
     const t = await r.text();
+    if (t.indexOf('denied') !== -1) throw new Error('이 지갑의 희망글은 다른 기기에서 등록됐습니다. 그 기기에서 수정하거나, [문의]로 삭제를 요청해주세요');
     if (!r.ok || t.indexOf('ok') === -1) throw new Error('등록 실패: 잠시 후 다시 시도해주세요');
+    const tm = t.match(/ok:([0-9a-f]+)/);
+    if (tm) { try { localStorage.setItem(tokKey, tm[1]); } catch (_) {} }
     const ov = document.getElementById('wishFormOv'); if (ov) ov.remove();
     showToast('✅ 매수 희망이 등록됐습니다');
     loadBuyWishes();
@@ -1461,11 +1465,14 @@ async function saveWish() {
 async function deleteWish() {
   try {
     if (!walletAddress) return;
-    await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_del', {
+    const tokKey = 'wishTok_' + walletAddress.toLowerCase();
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_del', {
       method: 'POST',
       headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_wallet: walletAddress }),
+      body: JSON.stringify({ p_wallet: walletAddress, p_token: (function(){ try { return localStorage.getItem(tokKey); } catch (_) { return null; } })() }),
     });
+    if ((await r.text()).indexOf('denied') !== -1) { showToast('이 지갑의 희망글은 다른 기기에서 등록됐습니다. 그 기기에서 내리거나 [문의]로 요청해주세요', 4500); return; }
+    try { localStorage.removeItem(tokKey); } catch (_) {}
     showToast('매수 희망을 내렸습니다');
     loadBuyWishes();
   } catch {}
