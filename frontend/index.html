@@ -845,7 +845,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101104';
+const APP_VERSION = '2026101105';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1450,8 +1450,9 @@ async function loadMarketStats() {
     document.getElementById('mkUpdated').textContent = (m.updated || '').slice(0, 10) + ' 기준';
     const rec = m.recent.slice(0, 5);
     const avg = m.avg30 ? Math.round(m.avg30).toLocaleString() + '원' : '—';
-    document.getElementById('mkSummary').innerHTML =
-      `최근 30일 평균 <strong style="color:var(--gold)">1 MPC ≈ ${avg}</strong> · 완결 ${m.count30 || rec.length}건`;
+    document.getElementById('mkSummary').innerHTML = (m.count30 > 0)
+      ? `최근 30일 평균 <strong style="color:var(--gold)">1 MPC ≈ ${avg}</strong> · 체결 ${m.count30}건`
+      : `최근 30일 체결 없음 · 역대 완결 ${rec.length}건 (아래는 과거 체결 기록)`;
     document.getElementById('mkRecent').innerHTML = rec.map(t =>
       `<div style="display:flex;justify-content:space-between"><span>${t.d} · ${(+t.mpc).toLocaleString()} MPC</span><strong style="color:var(--text2)">개당 ${(+t.unitKrw).toLocaleString()}원</strong></div>`
     ).join('');
