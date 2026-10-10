@@ -74,6 +74,16 @@ const num = v => Number(ethers.formatUnits(v, 18));
     else console.log('변조 감시: 실서버 = 정본 일치');
   } catch (e) { console.log('⚠️ 변조 감시 실패:', e.message); fail = true; }
 
+  // ── ②-2b 도메인 만료 감시: mpcescrow.com 연장을 놓치면 사이트 전체가 죽는다 (60일 전부터 경보) ──
+  try {
+    const rd = await (await fetch('https://rdap.verisign.com/com/v1/domain/mpcescrow.com', { headers: { Accept: 'application/rdap+json' } })).json();
+    const exp = (rd.events || []).find(e => e.eventAction === 'expiration');
+    if (!exp) throw new Error('만료일 정보 없음');
+    const days = Math.floor((new Date(exp.eventDate) - Date.now()) / 86400000);
+    if (days <= 60) { console.log(`⚠️ 도메인 mpcescrow.com 만료 ${days}일 전 (${exp.eventDate.slice(0, 10)}) — 가비아에서 연장 필요!`); fail = true; }
+    else console.log(`도메인 만료: ${days}일 남음 (${exp.eventDate.slice(0, 10)})`);
+  } catch (e) { console.log('⚠️ 도메인 만료 확인 실패:', e.message); }
+
   // ── ②-3 알림 구독자 명단 백업: 서버 사고 시 복구용 (금고 폴더, 30일 보관) ──
   try {
     const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/functions/v1/esc-push-send', {
