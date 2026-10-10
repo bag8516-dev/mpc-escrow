@@ -834,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101101';
+const APP_VERSION = '2026101102';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1574,8 +1574,8 @@ async function fetchLiveRate() {
   const el = document.getElementById('liveRate');
   const upd = document.getElementById('rateUpdating');
   if (upd) upd.innerHTML = '<span class="spinner-sm"></span>업데이트 중';
-  // 업비트 먼저, 실패하면 CoinGecko — 둘 중 하나만 살아있어도 환율 표시됨
-  for (const fetcher of [fetchRateUpbit, fetchRateCoinGecko]) {
+  // CoinGecko 먼저(브라우저 허용), 업비트는 예비 — 업비트는 브라우저 직접 호출을 막아 매번 실패 소음만 냈음 (2026-10-11)
+  for (const fetcher of [fetchRateCoinGecko, fetchRateUpbit]) {
     try {
       liveKrwRate = await fetcher();
       if (el) el.textContent = `${liveKrwRate.toLocaleString()}원`;
