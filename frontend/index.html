@@ -700,7 +700,7 @@ function installApp() {
 // 이 코드가 공식 주소가 아닌 곳에서 실행되면 = 누군가 앱을 복제해 올린 것.
 // 회원이 입력·서명을 하기 전에 전면 경고로 차단한다. (로컬 개발 환경은 예외)
 (function () {
-  const OFFICIAL_HOST = 'bag8516-dev.github.io';
+  const OFFICIAL_HOST = 'mpcescrow.com';
   const h = location.hostname;
   if (h === OFFICIAL_HOST || h === 'localhost' || h === '127.0.0.1' || h === '') return;
   document.addEventListener('DOMContentLoaded', function () {
@@ -710,7 +710,7 @@ function installApp() {
       '<div style="font-size:20px;font-weight:800;margin-bottom:12px">가짜 사이트입니다</div>' +
       '<div style="font-size:14px;line-height:1.7">지금 보고 계신 주소(' + h + ')는 MPC 에스크로 공식 사이트가 아닙니다.<br>' +
       '절대 지갑을 연결하거나 서명하지 마세요.<br><br>공식 주소:<br>' +
-      '<strong style="font-family:monospace;font-size:15px;color:#fff">bag8516-dev.github.io/mpc-escrow</strong></div></div></div>';
+      '<strong style="font-family:monospace;font-size:15px;color:#fff">mpcescrow.com/mpc-escrow</strong></div></div></div>';
   });
 })();
 
@@ -744,7 +744,7 @@ const CONFIG = {
 
   WC_PROJECT_ID: '3bb27596d90984a0f485530e30b44cba',
   KAKAO_CHANNEL: 'http://pf.kakao.com/_HCKbX',
-  OFFICIAL_URL:  'bag8516-dev.github.io/mpc-escrow', // 고정값 — 접속 주소를 그대로 보여주면 복제(피싱) 사이트에서 가짜 주소가 '공식'으로 표시되는 허점이 있음 (2026-10 수정)
+  OFFICIAL_URL:  'mpcescrow.com/mpc-escrow', // 고정값 — 접속 주소를 그대로 보여주면 복제(피싱) 사이트에서 가짜 주소가 '공식'으로 표시되는 허점이 있음 (2026-10 수정)
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MIN_MPC:       100,
   MAX_MPC:       100000,
@@ -845,7 +845,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101106';
+const APP_VERSION = '2026101107';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1178,7 +1178,7 @@ async function altConnectEntry() {
       '📱 <strong>올바른 접속 방법</strong><br><br>' +
       '이 화면(Trust Wallet 안)이 아니라 <strong>홈 화면의 에스크로 앱</strong>에서 이용해주세요.<br><br>' +
       '1. 삼성 인터넷 또는 크롬 앱을 여세요<br>' +
-      '2. 공식 주소로 접속하세요<br><span style="font-family:monospace;color:var(--gold)">bag8516-dev.github.io/mpc-escrow</span> ' +
+      '2. 공식 주소로 접속하세요<br><span style="font-family:monospace;color:var(--gold)">mpcescrow.com/mpc-escrow</span> ' +
       '<button class="btn btn-sm btn-outline" style="margin-top:6px;width:100%" onclick="copyOfficialUrl()">공식 주소 복사</button><br>' +
       '3. <strong>[지갑 연결하기]</strong> 버튼을 누르세요<br>' +
       '4. Trust Wallet 앱 승인 화면이 뜨면 승인 → 이후 서명은 Trust Wallet 앱 알림으로 옵니다'
@@ -1189,7 +1189,7 @@ async function altConnectEntry() {
   await tryAltConnect();
 }
 function copyOfficialUrl() {
-  const url = 'https://bag8516-dev.github.io/mpc-escrow/';
+  const url = 'https://mpcescrow.com/mpc-escrow/';
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(() => showToast('✅ 공식 주소가 복사됐습니다'));
   } else {
@@ -1198,7 +1198,7 @@ function copyOfficialUrl() {
       ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
       showToast('✅ 공식 주소가 복사됐습니다');
-    } catch { showToast('주소: bag8516-dev.github.io/mpc-escrow'); }
+    } catch { showToast('주소: mpcescrow.com/mpc-escrow'); }
   }
 }
 
@@ -1299,7 +1299,7 @@ async function shareTradeCard(mpc, usdt, createdAt, tradeId) {
     x.fillText('이 거래는 폴리곤 블록체인에 영구 기록되어', W / 2, 560);
     x.fillText('누구나 검증할 수 있습니다', W / 2, 582);
     x.fillStyle = '#d4af37'; x.font = '700 15px sans-serif';
-    x.fillText('bag8516-dev.github.io/mpc-escrow', W / 2, 628);
+    x.fillText('mpcescrow.com/mpc-escrow', W / 2, 628);
     const blob = await new Promise(res => c.toBlob(res, 'image/png'));
     const file = new File([blob], 'mpc-escrow-trade.png', { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1442,7 +1442,7 @@ async function loadBuyWishes() {
 // 커뮤니티 시세판: 완결 거래 집계(market.json, 매일 아침 점검이 발행)
 async function loadMarketStats() {
   try {
-    const r = await fetch('https://bag8516-dev.github.io/market.json?t=' + Math.floor(Date.now() / 3600000));
+    const r = await fetch('https://mpcescrow.com/market.json?t=' + Math.floor(Date.now() / 3600000));
     if (!r.ok) return;
     const m = await r.json();
     if (!m || !Array.isArray(m.recent) || m.recent.length === 0) return;
