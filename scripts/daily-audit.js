@@ -6,6 +6,7 @@
 //   과거 버전은 거래 목록을 스캔 시작 시점(N)에, 잔액을 스캔 종료 시점(20분 뒤)에 읽어서
 //   그 사이 새로 등록된 거래만큼 "잔액이 더 많다"는 가짜 불일치가 떴다.
 //   현재 방식: 잠긴 금액은 이벤트 로그로 N 시점 계산, 잔액은 (현재 잔액 − N 이후 순입금)으로 N 시점 환산.
+const ADMIN_KEY = require('fs').readFileSync('C:/ssabom/appdata/mpc-esc-admin-secret.txt', 'utf8').match(/[0-9a-f]{24,64}/)[0]; // 비밀값은 금고 파일에만
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');
@@ -129,7 +130,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
       const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/rest/v1/rpc/esc_audit_set', {
         method: 'POST',
         headers: { apikey: 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', Authorization: 'Bearer sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_key: '15e3369ce1c8ebd3d9236919', p_ok: locked === bal, p_locked: num(locked) }),
+        body: JSON.stringify({ p_key: ADMIN_KEY, p_ok: locked === bal, p_locked: num(locked) }),
       });
       console.log((await r.text()).includes('ok') ? '신뢰 배지: 기록 완료' : '⚠️ 신뢰 배지 기록 실패');
     } catch (e) { console.log('⚠️ 신뢰 배지 기록 실패:', e.message); }
@@ -203,7 +204,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
       webpush.setVapidDetails('mailto:bag8516@gmail.com', pub, priv); // 실존 주소 필수 — 가짜면 애플만 403
       const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/functions/v1/esc-push-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dump: true, key: '15e3369ce1c8ebd3d9236919' }),
+        body: JSON.stringify({ dump: true, key: ADMIN_KEY }),
       });
       const OPERATOR = '0xf07ab48453b4f97cc15966a6f06f815399ea00c1';
       const subs = (((await r.json()).subs) || []).filter(s => s.wallet === OPERATOR);
