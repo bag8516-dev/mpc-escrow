@@ -64,6 +64,35 @@ const num = v => Number(ethers.formatUnits(v, 18));
     else console.log(`실서버: 정상 (v${liveVer}${vj.notice ? ', 공지 배너 송출 중' : ''})`);
   } catch (e) { console.log('⚠️ 실서버 확인 실패:', e.message); fail = true; }
 
+  // ── ②-2 실서버 변조 감시: 배포된 index.html이 이 PC의 정본(gh-pages)과 1바이트라도 다르면 경보 ──
+  // (깃허브 계정이 뚫려 앱이 바꿔치기되는 시나리오를 다음 날 아침 안에 잡는다)
+  try {
+    const live = await (await fetch(LIVE + 'index.html?t=' + Math.floor(Math.random() * 1e9))).text();
+    const local = require('child_process').execSync('git -C C:/Projects/mpc-escrow show gh-pages:index.html', { maxBuffer: 16 * 1024 * 1024 }).toString('utf8');
+    const norm = s => s.replace(/\r\n/g, '\n').replace(/\s+$/, '');
+    if (norm(live) !== norm(local)) { console.log('⚠️ 실서버 변조 의심: 배포된 index.html이 이 PC 정본과 다릅니다 — 무단 변경 또는 미배포 커밋. 즉시 확인 필요'); fail = true; }
+    else console.log('변조 감시: 실서버 = 정본 일치');
+  } catch (e) { console.log('⚠️ 변조 감시 실패:', e.message); fail = true; }
+
+  // ── ②-3 알림 구독자 명단 백업: 서버 사고 시 복구용 (금고 폴더, 30일 보관) ──
+  try {
+    const r = await fetch('https://idqnxrwrnisxjbovvpli.supabase.co/functions/v1/esc-push-send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dump: true, key: ADMIN_KEY }),
+    });
+    const subs = ((await r.json()).subs) || [];
+    if (!subs.length) throw new Error('구독 0건 응답 — 서버 확인 필요');
+    const dir = 'C:/ssabom/appdata/backup';
+    fs.mkdirSync(dir, { recursive: true });
+    const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    fs.writeFileSync(path.join(dir, `esc-subs-${day}.json`), JSON.stringify(subs, null, 1));
+    for (const f of fs.readdirSync(dir)) {
+      const m = f.match(/^esc-subs-(\d{4}-\d{2}-\d{2})\.json$/);
+      if (m && (Date.now() - new Date(m[1]).getTime()) > 30 * 86400 * 1000) fs.unlinkSync(path.join(dir, f));
+    }
+    console.log(`구독자 백업: ${subs.length}건 저장 (${day})`);
+  } catch (e) { console.log('⚠️ 구독자 백업 실패:', e.message); fail = true; }
+
   // ── ① 장부 대조 + ③ 통계 ──
   try {
     const N = await p.getBlockNumber();   // 기준 블록 — 모든 수치를 이 시점으로 맞춘다
