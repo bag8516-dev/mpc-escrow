@@ -24,7 +24,7 @@ const RPC_FALLBACK = 'https://rpc-mainnet.matic.quiknode.pro';
 const PROXY = '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972';
 const USDT = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 const DEPLOY_BLOCK = 89500000;
-const LIVE = 'https://bag8516-dev.github.io/mpc-escrow/';
+const LIVE = 'https://mpcescrow.com/mpc-escrow/';
 const TIMEOUT = 86400; // 24h — 컨트랙트 TRADE_TIMEOUT과 동일
 
 const TRANSFER  = ethers.id('Transfer(address,address,uint256)');
@@ -41,7 +41,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
   let p;
   try {
     const req = new ethers.FetchRequest(RPC_MAIN);
-    req.setHeader('Origin', 'https://bag8516-dev.github.io');
+    req.setHeader('Origin', 'https://mpcescrow.com');
     p = new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
     const t0 = Date.now();
     await p.getBlockNumber();
