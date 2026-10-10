@@ -834,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101001';
+const APP_VERSION = '2026101101';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2306,7 +2306,7 @@ async function checkTradeAlerts() {
     }
 
     const goStatus = showReturn; // 확인 누르면 진행 중 탭으로 이동할지
-    const ok = await showConfirm('📢 알림', html + (goStatus ? '<br>지금 반환하러 가시겠습니까?' : ''));
+    const ok = await showConfirm('📢 알림', html + (goStatus ? '<br>[확인]을 누르면 반환이 차례로 진행됩니다. 건당 Trust Wallet 서명 1번이면 됩니다.' : ''));
     // 완료 알림은 표시했으면 확인 처리 (다시 안 뜨게)
     if (newDone.length > 0) {
       const nowSeen = seen || new Set();
@@ -2315,7 +2315,7 @@ async function checkTradeAlerts() {
       localStorage.setItem(SEEN_COMPLETED_KEY, JSON.stringify([...nowSeen]));
     }
     if (showReturn) window._returnAlertShown = true;
-    if (ok && goStatus) showTab('status');
+    if (ok && goStatus) { showTab('status'); runReturnQueue(needReturn); }
   } catch { /* 알림 실패는 기능에 영향 없음 */ }
 }
 
@@ -2875,16 +2875,33 @@ async function cancelTradeById(tradeId) {
 }
 
 
-async function expireTradeById(tradeId) {
-  const ok = await showConfirm('만료 처리', '판매 시간(24시간)이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
-  if (!ok) return;
-  showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
+async function expireTradeById(tradeId, skipConfirm) {
+  if (!skipConfirm) {
+    const ok = await showConfirm('만료 처리', '판매 시간(24시간)이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
+    if (!ok) return false;
+  }
+  if (!skipConfirm) showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
   try {
     await callExpire(tradeId);
     updateLocalTradeStatus(tradeId, 'EXPIRED');
     showToast('✅ 만료 처리됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
-  } catch(err) { showError(parseError(err)); }
+    return true;
+  } catch(err) { showError(parseError(err)); return false; }
+}
+
+// 반환 대기 연속 처리: 팝업에서 [확인]을 누르면 서명만 차례로 하면 되게
+async function runReturnQueue(list) {
+  for (let i = 0; i < list.length; i++) {
+    showToast(`⏳ 반환 ${i + 1}/${list.length} — Trust Wallet에서 서명해주세요`, 7000);
+    const done = await expireTradeById(list[i].tradeId, true);
+    if (!done) {
+      const left = list.length - i - 1;
+      if (left > 0) showToast(`남은 ${left}건은 [진행 중] 탭에서 이어서 반환할 수 있습니다`, 5000);
+      return;
+    }
+  }
+  if (list.length > 1) showToast(`✅ ${list.length}건 모두 반환 처리! MPC가 10분 내로 지갑에 들어옵니다`);
 }
 
 // 체인에서 실제 거래 상태 동기화
