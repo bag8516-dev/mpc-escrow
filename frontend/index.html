@@ -347,7 +347,6 @@ function installApp() {
         🔗 지갑 연결하기
       </button>
       <button class="btn btn-outline" onclick="browseMarket()" style="max-width:320px;width:100%">🏪 장터 구경하기 (연결 없이)</button>
-      <button class="btn btn-outline" onclick="altConnectEntry()" style="max-width:320px;width:100%;font-size:13px">연결이 안 되나요? 예비 연결 방식</button>
       <button class="btn btn-outline" id="btnInstallApp" onclick="installApp()" style="max-width:320px;width:100%;display:none;border-color:var(--gold);color:var(--gold)">📲 홈 화면에 앱 설치</button>
       <div style="font-size:12px;color:var(--text3);margin-top:6px">모바일 전용 · Trust Wallet 앱이 설치되어 있어야 합니다.<br>일반 브라우저에서도 연결 버튼을 누르면 Trust Wallet이 자동 실행됩니다.<br>PC에서는 사용하실 수 없습니다.</div>
     </div>
@@ -370,6 +369,7 @@ function installApp() {
   <div id="pageSell" class="page">
     <div class="card">
       <div class="card-title">📦 판매 설정</div>
+      <div id="sellWishHint" style="display:none;background:#1d3a1d;border:1px solid #2e5c2e;border-radius:8px;padding:8px 10px;font-size:12px;color:#9fe29f;margin-bottom:10px"></div>
 
       <div class="input-group">
         <label class="input-label">MPC 수량</label>
@@ -487,6 +487,19 @@ function installApp() {
     <div style="padding:12px 16px 0">
       <button class="btn btn-primary" onclick="showTab('sell')">➕ 내 MPC 판매 글 올리기</button>
     </div>
+
+    <!-- 신뢰 배지: 매일 아침 자동 장부 검증 결과 (2026-10) -->
+    <div id="auditBadge" style="display:none;margin:12px 16px 0;background:#102a18;border:1px solid #2e5c3a;border-radius:10px;padding:9px 12px;font-size:12px;color:#8fdba8"></div>
+
+    <!-- 매수 희망 게시판 (2026-10): 사는 쪽 수요가 보이게 -->
+    <div style="margin:14px 16px 0;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-weight:800;font-size:14px;color:var(--gold)">💰 매수 희망</div>
+        <button class="btn btn-sm btn-outline" onclick="openWishForm()">내 매수 희망 등록</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">"이 가격에 이만큼 사고 싶다"는 등록입니다. 판매자는 이 가격을 참고해 판매 글을 올리세요.</div>
+      <div id="buyWishList" style="font-size:13px;color:var(--text2)">불러오는 중...</div>
+    </div>
     <div style="padding:10px 16px 0;display:flex;gap:8px">
       <button class="btn btn-sm btn-ghost" id="mktSortNew" onclick="setMarketSort('new')" style="flex:1;border:1px solid var(--gold)">🕐 최신순</button>
       <button class="btn btn-sm btn-ghost" id="mktSortPrice" onclick="setMarketSort('price')" style="flex:1;border:1px solid var(--border)">💰 낮은 가격순</button>
@@ -538,13 +551,13 @@ function installApp() {
   <div class="tab-item" onclick="showTab('history')" id="tab-history">
     <span class="tab-icon">📋</span><span>내역</span>
   </div>
+  <div class="tab-item" onclick="openKakao()" id="tab-cs">
+    <span class="tab-icon">💬</span><span>문의</span>
+  </div>
 </div>
 
-<!-- ─── 카카오 문의 버튼 ──────────────────────────────────── -->
-<button class="kakao-btn" id="kakaoCsBtn" style="display:none" onclick="openKakao()">
-  <svg class="kakao-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="8" fill="#3C1E1E"/><path d="M12 6c-3.3 0-6 2-6 4.5 0 1.6 1 3 2.5 3.8l-.6 2.2 2.7-1.8c.4.1.9.1 1.4.1 3.3 0 6-2 6-4.5S15.3 6 12 6z" fill="#FEE500"/></svg>
-  카카오 문의
-</button>
+<!-- 카카오 문의: 하단 탭의 [문의]로 이동 (2026-10). 플로팅 버튼은 제거 — openKakao()는 유지 -->
+<button class="kakao-btn" id="kakaoCsBtn" style="display:none !important" onclick="openKakao()" hidden></button>
 
 <!-- ═══════════════════════════════════════════════════════════════
      모달: 확인 팝업
@@ -565,7 +578,7 @@ function installApp() {
 <div class="modal-overlay" id="modalError">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">⚠️ 오류 발생</div>
+    <div class="modal-title" id="modalErrorTitle">⚠️ 오류 발생</div>
     <div id="modalErrorBody" style="color:var(--text2);font-size:14px;line-height:1.6"></div>
     <div id="errDiagArea" style="display:none;margin-top:12px">
       <div style="font-size:12px;color:var(--text3);line-height:1.6">문제가 해결되지 않으면 아래 <strong style="color:var(--gold)">오류 정보</strong>를 카카오 문의로 보내주세요. [복사] 버튼이 안 눌리면 <strong>이 화면을 캡처</strong>해서 보내주셔도 됩니다.</div>
@@ -630,9 +643,10 @@ function installApp() {
 <div class="modal-overlay" id="modalPolLow">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">⛽ 가스비 부족</div>
+    <div class="modal-title">⛽ 수수료 코인(POL) 부족</div>
     <div style="color:var(--text2);font-size:14px;line-height:1.7">
-      트랜잭션 수수료(가스비)가 부족합니다.<br>지갑에 <strong>POL</strong>을 충전한 후 다시 시도해주세요.
+      앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자랍니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br>
+      지갑에 POL을 충전한 후 다시 시도해주세요.
     </div>
     <button class="btn btn-primary" style="margin-top:16px" onclick="closeModal('modalPolLow')">확인</button>
   </div>
@@ -671,6 +685,24 @@ function installApp() {
 <script>
 'use strict';
 
+// ── 가짜(복제) 사이트 자가 감지 ───────────────────────────────────────────
+// 이 코드가 공식 주소가 아닌 곳에서 실행되면 = 누군가 앱을 복제해 올린 것.
+// 회원이 입력·서명을 하기 전에 전면 경고로 차단한다. (로컬 개발 환경은 예외)
+(function () {
+  const OFFICIAL_HOST = 'bag8516-dev.github.io';
+  const h = location.hostname;
+  if (h === OFFICIAL_HOST || h === 'localhost' || h === '127.0.0.1' || h === '') return;
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.innerHTML =
+      '<div style="position:fixed;inset:0;z-index:9999;background:#2a0a0a;color:#ffd9d9;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center">' +
+      '<div style="max-width:420px"><div style="font-size:40px;margin-bottom:12px">⚠️</div>' +
+      '<div style="font-size:20px;font-weight:800;margin-bottom:12px">가짜 사이트입니다</div>' +
+      '<div style="font-size:14px;line-height:1.7">지금 보고 계신 주소(' + h + ')는 MPC 에스크로 공식 사이트가 아닙니다.<br>' +
+      '절대 지갑을 연결하거나 서명하지 마세요.<br><br>공식 주소:<br>' +
+      '<strong style="font-family:monospace;font-size:15px;color:#fff">bag8516-dev.github.io/mpc-escrow</strong></div></div></div>';
+  });
+})();
+
 // ── 설정 ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   // ★ 배포 후 아래 주소를 실제 프록시 주소로 교체하세요 ★
@@ -680,12 +712,12 @@ const CONFIG = {
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
   CHAIN_ID:      137,
   CHAIN_NAME:    'Polygon',
-  RPC_URL:       'https://polygon-bor-rpc.publicnode.com',
+  RPC_URL:       'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (2026-10 도입, 무료 한도 일 300만)
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
+  // 2026-10: Infura 전용 노드를 1순위로 — 공용 노드 상태에 따른 401/429/지연 오류 구조적 제거
   RPC_FALLBACKS: [
-    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능 (장터 1순위)
-    // 주의: 전용 엔드포인트(icy-green-pallet)는 도메인 제한(referrer)이 걸려 브라우저 밖 요청 시 401 →
-    //       앱 조회 경로에서 제거 (referrer가 없는 fetch/트랜잭션 준비 조회에서 오류 유발)
+    'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (1순위)
+    'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
     'https://1rpc.io/matic',
@@ -701,7 +733,7 @@ const CONFIG = {
 
   WC_PROJECT_ID: '3bb27596d90984a0f485530e30b44cba',
   KAKAO_CHANNEL: 'http://pf.kakao.com/_HCKbX',
-  OFFICIAL_URL:  window.location.hostname,
+  OFFICIAL_URL:  'bag8516-dev.github.io/mpc-escrow', // 고정값 — 접속 주소를 그대로 보여주면 복제(피싱) 사이트에서 가짜 주소가 '공식'으로 표시되는 허점이 있음 (2026-10 수정)
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MIN_MPC:       100,
   MAX_MPC:       100000,
@@ -802,7 +834,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026072721';
+const APP_VERSION = '2026101001';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -835,24 +867,31 @@ document.addEventListener('visibilitychange', () => {
 // (트러스트월렛 서버 장애처럼 앱 밖 문제를 실시간 안내하는 용도 — 코드 배포 불필요)
 function showOpNotice(text) {
   const old = document.getElementById('opNoticeBanner');
-  if (!text || !String(text).trim()) { if (old) old.remove(); return; }
-  // 같은 공지를 이 세션에서 닫았으면 다시 안 띄움
-  try { if (sessionStorage.getItem('op_notice_dismissed') === String(text)) return; } catch {}
-  if (old) { old.querySelector('.op-notice-text').textContent = text; return; }
-  const div = document.createElement('div');
-  div.id = 'opNoticeBanner';
-  div.style.cssText = 'position:sticky;top:0;z-index:401;background:#12233f;border-bottom:1px solid #4a90d9;padding:10px 14px;font-size:13px;line-height:1.5;color:#cfe4ff;display:flex;gap:10px;align-items:center';
-  const span = document.createElement('span');
-  span.className = 'op-notice-text';
-  span.style.flex = '1';
-  span.textContent = text; // 텍스트로만 삽입 (스크립트 삽입 방지)
-  const btn = document.createElement('button');
-  btn.textContent = '닫기';
-  btn.className = 'btn btn-sm btn-outline';
-  btn.style.flexShrink = '0';
-  btn.onclick = () => { try { sessionStorage.setItem('op_notice_dismissed', String(text)); } catch {} div.remove(); };
-  div.appendChild(span); div.appendChild(btn);
-  document.body.prepend(div);
+  if (old) old.remove(); // 상단 띠는 더 이상 사용하지 않음 (팝업 1회로 통일, 2026-10 결정)
+  if (!text || !String(text).trim()) return;
+  // 새 공지는 기기당 1회 가운데 팝업으로만 보여줌
+  try {
+    if (localStorage.getItem('op_notice_popup_seen') !== String(text)) {
+      localStorage.setItem('op_notice_popup_seen', String(text));
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(10,15,30,.85);display:flex;align-items:center;justify-content:center;padding:24px';
+      const box = document.createElement('div');
+      box.style.cssText = 'max-width:380px;width:100%;background:var(--card2,#182338);border:1px solid #4a90d9;border-radius:14px;padding:22px;text-align:center';
+      const h = document.createElement('div');
+      h.textContent = '📢 공지사항';
+      h.style.cssText = 'font-size:17px;font-weight:800;color:#cfe4ff;margin-bottom:12px';
+      const p = document.createElement('div');
+      p.textContent = text; // 텍스트로만 삽입 (스크립트 삽입 방지)
+      p.style.cssText = 'font-size:14px;line-height:1.7;color:var(--text2,#c9d4e8);margin-bottom:18px;white-space:pre-line';
+      const ok = document.createElement('button');
+      ok.textContent = '확인';
+      ok.className = 'btn btn-primary';
+      ok.style.width = '100%';
+      ok.onclick = () => ov.remove();
+      box.appendChild(h); box.appendChild(p); box.appendChild(ok); ov.appendChild(box);
+      document.body.appendChild(ov);
+    }
+  } catch {}
 }
 
 // ── Trust Wallet 노드 자가진단 + 선제 경고 배너 ──────────────────────────
@@ -893,7 +932,7 @@ function showTwBlockOverlay() {
         ✅ <strong>올바른 이용 방법</strong><br>
         ① 이 화면을 닫고 Trust Wallet 종료<br>
         ② <strong>홈 화면의 에스크로 앱</strong>(또는 삼성 인터넷에서 공식 주소)으로 접속<br>
-        ③ <strong>[연결이 안 되나요? 예비 연결 방식]</strong> 버튼 → Trust Wallet [승인]<br>
+        ③ <strong>[지갑 연결하기]</strong> 버튼 → Trust Wallet [승인]<br>
         ④ 이후 서명은 Trust Wallet 앱에서 진행
       </div>
       <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('twBlockOverlay').remove();altConnectEntry()">📖 자세한 방법 보기</button>
@@ -905,22 +944,33 @@ function showTwBlockOverlay() {
 
 async function twNodeHealthCheck() {
   if (typeof window.ethereum === 'undefined') return; // TW 브라우저 아님
-  if (isTwNodeBad()) { showTwBlockOverlay(); return; } // 이미 문제 기기로 기억됨 → 전체 화면 안내
+  const wasBad = isTwNodeBad();
   try {
     // 지갑 노드에 가벼운 읽기 요청 — 8초 내 응답 없거나 401 계열이면 문제 기기로 기록
     await Promise.race([
       window.ethereum.request({ method: 'eth_blockNumber' }),
       sleep(8000).then(() => { throw new Error('health timeout'); }),
     ]);
+    // 정상 응답: 과거에 잘못 찍힌 낙인이 있으면 지움 (일시 장애로 멀쩡한 기기에 경고가 반복되던 문제 수정, 2026-10)
+    if (wasBad) { try { localStorage.removeItem(TW_BAD_KEY); } catch {} }
   } catch (e) {
     const msg = String(e?.message || e);
-    if (/401|403|429|HTTP|timeout|network|Java exception/i.test(msg)) markTwNodeBad();
+    if (/401|403|429|HTTP|timeout|network|Java exception/i.test(msg)) {
+      if (wasBad) showTwBlockOverlay(); // 두 번 이상 연속 실패한 기기만 전체 화면 안내
+      else markTwNodeBad();             // 첫 실패는 기록 + 작은 배너만
+    }
   }
 }
 
 // ── 초기화 ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
+  loadBuyWishes();   // 매수 희망 목록 (장터 배지·판매 힌트용)
+  loadAuditBadge();  // 장부 검증 신뢰 배지
+  // 모바일 전체: 연결 모듈을 접속하자마자 미리 받아둠 (첫 탭에 바로 연결되게, 2026-10 개편)
+  try {
+    if (/Android|iPhone|iPad/i.test(navigator.userAgent) && typeof window.ethereum === 'undefined') loadWcLib().catch(() => {});
+  } catch {}
   twNodeHealthCheck(); // TW 브라우저면 지갑 노드 자가진단 (백그라운드)
   document.getElementById('officialUrl').textContent = CONFIG.OFFICIAL_URL;
   detectEnvironment();
@@ -978,21 +1028,6 @@ function setDeviceGuide() {
   }
 }
 
-// ── Trust Wallet 딥링크 (기기별) ──────────────────────────────────────────
-// 안드로이드: 카카오톡 등 인앱 브라우저에서 https 유니버설 링크가 앱을 못 여는 경우가 있어
-//             intent:// 방식으로 Trust Wallet을 직접 지정 (실패 시 https 링크로 폴백)
-// 아이폰: https 유니버설 링크가 안정적으로 작동
-function twDeepLink(targetUrl) {
-  const enc = encodeURIComponent(targetUrl);
-  const universal = 'https://link.trustwallet.com/open_url?coin_id=966&url=' + enc;
-  if (/Android/i.test(navigator.userAgent)) {
-    return 'intent://open_url?coin_id=966&url=' + enc
-      + '#Intent;package=com.wallet.crypto.trustapp;scheme=trust;S.browser_fallback_url='
-      + encodeURIComponent(universal) + ';end';
-  }
-  return universal;
-}
-
 // ── 지갑 연결 ──────────────────────────────────────────────────────────────
 async function connectWallet() {
   const btn = document.getElementById('btnConnect');
@@ -1000,7 +1035,7 @@ async function connectWallet() {
   try {
     if (typeof ethers === 'undefined') {
       resetButton(btn, '🔗 지갑 연결하기');
-      showToast('라이브러리 로딩 중... 3초 후 다시 눌러주세요');
+      showToast('연결 준비 중입니다. 3초 후 다시 눌러주세요');
       return;
     }
     if (typeof window.ethereum !== 'undefined') {
@@ -1021,17 +1056,12 @@ async function connectWallet() {
       await connectViaWalletConnect(btn);
       return;
     }
-    // 일반 브라우저·카카오톡 등 (Trust Wallet 밖): Trust Wallet 내장 브라우저로 이어서 진행
-    // → 연결·서명이 전부 Trust Wallet 안에서 팝업으로 처리되어 앱 왕복이 없음
+    // 기본 연결 = WalletConnect (2026-10 개편): 우리 앱에 머문 채 Trust Wallet은 승인 때만 뜸.
+    // Trust Wallet 내장 브라우저로 들어가는 경로를 없애서 기종별 오류·경고·알림 불가 문제를 원천 제거.
+    // (Trust Wallet 탐색 탭으로 직접 들어온 경우는 위의 window.ethereum 분기로 기존처럼 처리됨)
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
     if (isMobile) {
-      setButtonLoading(btn, 'Trust Wallet으로 이동 중...');
-      showToast('📲 Trust Wallet에서 이어서 진행됩니다', 3500);
-      const target = location.origin + location.pathname
-        + (location.search ? location.search + '&' : '?') + 'autoconnect=1';
-      window.location.href = twDeepLink(target);
-      // Trust Wallet이 안 열리는 경우 대비 (미설치 등): 버튼 복구
-      setTimeout(() => resetButton(btn, '🔗 지갑 연결하기'), 4000);
+      await connectViaWalletConnect(btn);
       return;
     }
     // PC: 미지원 정책 유지
@@ -1068,7 +1098,7 @@ async function connectViaWalletConnect(btn) {
       wcProvider = await WCEP.init({
         projectId: CONFIG.WC_PROJECT_ID,
         chains: [CONFIG.CHAIN_ID],
-        rpcMap: { [CONFIG.CHAIN_ID]: 'https://rpc-mainnet.matic.quiknode.pro' }, // 조회·가스추정용 RPC (기본 WC RPC 불안정 대비)
+        rpcMap: { [CONFIG.CHAIN_ID]: CONFIG.RPC_URL }, // 조회·가스추정용 RPC — 전용 노드 사용 (기본 WC RPC 불안정 대비)
         showQrModal: false,
         metadata: {
           name: 'MPC 에스크로',
@@ -1133,12 +1163,12 @@ async function altConnectEntry() {
     // Trust Wallet 내장 브라우저: 일반 브라우저로 이동 안내
     window._lastErrDiag = null; // 오류 신고 영역 숨김 (안내용 창)
     showError(
-      '📱 <strong>예비 연결 방식 사용법</strong><br><br>' +
-      '이 화면(Trust Wallet 안)에서는 예비 연결을 쓸 수 없습니다. 휴대폰의 <strong>일반 인터넷 앱</strong>에서 진행해주세요.<br><br>' +
+      '📱 <strong>올바른 접속 방법</strong><br><br>' +
+      '이 화면(Trust Wallet 안)이 아니라 <strong>홈 화면의 에스크로 앱</strong>에서 이용해주세요.<br><br>' +
       '1. 삼성 인터넷 또는 크롬 앱을 여세요<br>' +
       '2. 공식 주소로 접속하세요<br><span style="font-family:monospace;color:var(--gold)">bag8516-dev.github.io/mpc-escrow</span> ' +
       '<button class="btn btn-sm btn-outline" style="margin-top:6px;width:100%" onclick="copyOfficialUrl()">공식 주소 복사</button><br>' +
-      '3. <strong>[연결이 안 되나요? 예비 연결 방식]</strong> 버튼을 누르세요<br>' +
+      '3. <strong>[지갑 연결하기]</strong> 버튼을 누르세요<br>' +
       '4. Trust Wallet 앱 승인 화면이 뜨면 승인 → 이후 서명은 Trust Wallet 앱 알림으로 옵니다'
     );
     return;
@@ -1216,11 +1246,242 @@ function initContractsEthers() {
   usdtContract   = new ethers.Contract(CONFIG.USDT_TOKEN,   ERC20_ABI,  window.__ethersSigner);
 }
 
+// ── 푸시 알림 (구매자 입금·판매 완료·반환 필요를 폰 알림으로) ──────────────
+const PUSH_CFG = {
+  URL: 'https://idqnxrwrnisxjbovvpli.supabase.co',
+  KEY: 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh',
+  VAPID: 'BI2VD37ndfhXCV1iu_S1_VS7f82axcVimZ61ESWuq64iCaeiwB0FmOPlaron2jTeuKYW98_VEuhK8USYXbwEU_k', // 2026-10-08 공식 도구 재발급 (애플 호환)
+};
+function pushB64ToU8(b) {
+  const pad = '='.repeat((4 - b.length % 4) % 4);
+  const raw = atob((b + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+function renderPushBtn() {
+  let btn = document.getElementById('pushBellBtn');
+  if (!btn) {
+    const header = document.getElementById('mainHeader');
+    if (!header) return;
+    btn = document.createElement('button');
+    btn.id = 'pushBellBtn';
+    btn.className = 'btn btn-sm btn-outline';
+    btn.style.cssText = 'margin-left:8px;flex-shrink:0;font-size:12px;padding:4px 10px';
+    btn.onclick = togglePush;
+    header.appendChild(btn);
+  }
+  const on = localStorage.getItem('esc_push_on') === '1' && Notification.permission === 'granted';
+  btn.textContent = on ? '🔔 알림 켜짐' : '🔕 알림 받기';
+}
+async function togglePush() {
+  try {
+    if (!pushSupported()) {
+      showToast('이 환경은 알림을 지원하지 않습니다. 홈 화면에 추가한 앱에서 이용해주세요', 5000);
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const cur = await reg.pushManager.getSubscription();
+    if (localStorage.getItem('esc_push_on') === '1' && cur) {
+      // 끄기
+      await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_del_push', {
+        method: 'POST',
+        headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_endpoint: cur.endpoint }),
+      }).catch(() => {});
+      await cur.unsubscribe().catch(() => {});
+      localStorage.removeItem('esc_push_on');
+      renderPushBtn();
+      showToast('알림을 껐습니다');
+      return;
+    }
+    // 켜기
+    if (Notification.permission === 'denied') {
+      showToast('알림이 차단되어 있습니다. 휴대폰 설정에서 이 앱의 알림을 허용해주세요', 5000);
+      return;
+    }
+    if (Notification.permission === 'default') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') return;
+    }
+    // 기존 구독은 재사용하지 않고 항상 새로 등록 (서명 열쇠가 교체돼도 어긋나지 않게, 2026-10)
+    if (cur) { try { await cur.unsubscribe(); } catch {} }
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushB64ToU8(PUSH_CFG.VAPID) });
+    const j = sub.toJSON();
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_save_push', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_wallet: walletAddress, p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth }),
+    });
+    const txt = await r.text();
+    if (!r.ok || txt.indexOf('ok') === -1) throw new Error('알림 서버 준비 중입니다. 잠시 후 다시 시도해주세요');
+    localStorage.setItem('esc_push_on', '1');
+    renderPushBtn();
+    showToast('🔔 알림이 켜졌습니다. 구매자 입금·판매 완료·반환 필요 시 알려드립니다', 5000);
+  } catch (e) {
+    showToast(String(e && e.message || '알림 설정에 실패했습니다'), 5000);
+  }
+}
+
+// 알림을 켜둔 기기: 등록된 구독이 현재 서명 열쇠와 다르면 조용히 새로 등록 (열쇠 교체 자가 치유, 2026-10)
+async function ensureFreshPushSub() {
+  try {
+    if (localStorage.getItem('esc_push_on') !== '1' || Notification.permission !== 'granted' || !walletAddress) return;
+    const reg = await navigator.serviceWorker.ready;
+    const cur = await reg.pushManager.getSubscription();
+    const want = pushB64ToU8(PUSH_CFG.VAPID);
+    let same = false;
+    if (cur && cur.options && cur.options.applicationServerKey) {
+      const have = new Uint8Array(cur.options.applicationServerKey);
+      same = have.length === want.length && have.every((v, i) => v === want[i]);
+    }
+    if (same) return;
+    const oldEndpoint = cur ? cur.endpoint : null;
+    if (cur) { try { await cur.unsubscribe(); } catch {} }
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
+    const j = sub.toJSON();
+    const hdr = { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' };
+    await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_save_push', { method: 'POST', headers: hdr,
+      body: JSON.stringify({ p_wallet: walletAddress, p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth }) });
+    if (oldEndpoint && oldEndpoint !== sub.endpoint) {
+      fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_del_push', { method: 'POST', headers: hdr,
+        body: JSON.stringify({ p_endpoint: oldEndpoint }) }).catch(() => {});
+    }
+    showToast('🔔 알림 등록을 최신 상태로 갱신했습니다');
+  } catch {}
+}
+
+// ── 매수 희망 게시판 ───────────────────────────────────────────────────────
+async function loadBuyWishes() {
+  const el = document.getElementById('buyWishList');
+  if (!el) return;
+  try {
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_list', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const rows = await r.json();
+    window._buyWishes = Array.isArray(rows) ? rows : [];
+    updateSellWishHint();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      el.innerHTML = '<div style="color:var(--text3);padding:6px 0">아직 등록된 매수 희망이 없습니다. 첫 번째로 등록해보세요.</div>';
+      return;
+    }
+    const mine = walletAddress ? walletAddress.toLowerCase() : null;
+    el.innerHTML = rows.map(w => {
+      const isMine = mine && w.wallet === mine;
+      const total = Math.round(w.mpc * w.price_krw);
+      const d = new Date(w.updated_at);
+      const dateTxt = (d.getMonth() + 1) + '/' + d.getDate();
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border)">'
+        + '<div style="flex:1"><strong>' + Number(w.mpc).toLocaleString() + ' MPC</strong>'
+        + ' · 개당 <strong style="color:var(--gold)">' + Number(w.price_krw).toLocaleString() + '원</strong>'
+        + '<div style="font-size:11px;color:var(--text3)">총 ' + total.toLocaleString() + '원 · ' + w.wallet.slice(0, 6) + '…' + w.wallet.slice(-4) + ' · ' + dateTxt + (isMine ? ' · <span style="color:var(--gold)">내 등록</span>' : '') + '</div></div>'
+        + (isMine ? '<button class="btn btn-sm btn-outline" onclick="deleteWish()">삭제</button>'
+                  : '<button class="btn btn-sm btn-primary" onclick="showTab(\'sell\')">판매하기</button>')
+        + '</div>';
+    }).join('');
+  } catch { el.innerHTML = '<div style="color:var(--text3);padding:6px 0">목록을 불러오지 못했습니다. 새로고침 해주세요.</div>'; }
+}
+
+// 신뢰 배지: 매일 아침 자동 장부 검증(잠긴 수량=보관 수량) 결과 표시 (2026-10)
+async function loadAuditBadge() {
+  try {
+    const el = document.getElementById('auditBadge');
+    if (!el) return;
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_audit_get', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const rows = await r.json();
+    const a = Array.isArray(rows) ? rows[0] : null;
+    if (!a || !a.ok) return; // 검증 실패·기록 없음 → 배지 미표시 (거짓 안심 금지)
+    const ageH = (Date.now() - new Date(a.checked_at).getTime()) / 3600000;
+    if (ageH > 36) return;   // 하루 반 넘게 오래된 기록이면 미표시
+    const d = new Date(a.checked_at);
+    el.textContent = '🛡️ 장부 검증 완료 (' + (d.getMonth() + 1) + '/' + d.getDate()
+      + ') — 예치된 ' + Math.round(Number(a.locked)).toLocaleString()
+      + ' MPC가 컨트랙트에 그대로 보관되어 있음을 매일 자동 확인합니다';
+    el.style.display = 'block';
+  } catch {}
+}
+
+// 판매 설정 화면 상단에 "현재 최고 매수 희망가" 힌트 표시 (매수-판매 연결, 2026-10)
+function updateSellWishHint() {
+  const el = document.getElementById('sellWishHint');
+  if (!el) return;
+  const ws = window._buyWishes || [];
+  if (!ws.length) { el.style.display = 'none'; return; }
+  const top = ws[0]; // 목록이 가격 높은 순이므로 첫 항목이 최고가
+  el.style.display = 'block';
+  el.textContent = '💰 현재 최고 매수 희망: 1 MPC당 ' + Number(top.price_krw).toLocaleString() + '원 × '
+    + Number(top.mpc).toLocaleString() + ' MPC — 이 가격 이하로 올리면 바로 팔릴 확률이 높습니다';
+}
+
+function openWishForm() {
+  if (!requireWallet()) return;
+  if (document.getElementById('wishFormOv')) return;
+  const ov = document.createElement('div');
+  ov.id = 'wishFormOv';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(10,15,30,.85);display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML = '<div style="max-width:360px;width:100%;background:var(--card2);border:1px solid var(--gold);border-radius:14px;padding:20px">'
+    + '<div style="font-size:16px;font-weight:800;color:var(--gold);margin-bottom:12px">💰 매수 희망 등록</div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:12px">지갑당 1건이며, 다시 등록하면 덮어씁니다. 30일 뒤 자동으로 내려갑니다.</div>'
+    + '<label style="font-size:12px;color:var(--text2)">희망 수량 (MPC)</label>'
+    + '<input id="wishMpc" type="number" inputmode="numeric" min="100" placeholder="예: 10000" style="width:100%;margin:4px 0 10px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
+    + '<label style="font-size:12px;color:var(--text2)">개당 희망가 (원)</label>'
+    + '<input id="wishPrice" type="number" inputmode="decimal" min="100" step="1" placeholder="예: 500 (최소 100원)" style="width:100%;margin:4px 0 14px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
+    + '<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveWish()">등록</button>'
+    + '<button class="btn btn-outline" style="width:100%" onclick="document.getElementById(\'wishFormOv\').remove()">취소</button></div>';
+  document.body.appendChild(ov);
+}
+
+async function saveWish() {
+  try {
+    const mpc = Number(document.getElementById('wishMpc').value);
+    const price = Number(document.getElementById('wishPrice').value);
+    if (!mpc || mpc < 100) { showToast('수량은 100 MPC 이상으로 입력해주세요'); return; }
+    if (!price || price < 100) { showToast('개당 희망가는 100원 이상으로 입력해주세요'); return; }
+    const tokKey = 'wishTok_' + walletAddress.toLowerCase();
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_set', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_wallet: walletAddress, p_mpc: mpc, p_price: price, p_token: (function(){ try { return localStorage.getItem(tokKey); } catch (_) { return null; } })() }),
+    });
+    const t = await r.text();
+    if (t.indexOf('denied') !== -1) throw new Error('이 지갑의 희망글은 다른 기기에서 등록됐습니다. 그 기기에서 수정하거나, [문의]로 삭제를 요청해주세요');
+    if (!r.ok || t.indexOf('ok') === -1) throw new Error('등록 실패: 잠시 후 다시 시도해주세요');
+    const tm = t.match(/ok:([0-9a-f]+)/);
+    if (tm) { try { localStorage.setItem(tokKey, tm[1]); } catch (_) {} }
+    const ov = document.getElementById('wishFormOv'); if (ov) ov.remove();
+    showToast('✅ 매수 희망이 등록됐습니다');
+    loadBuyWishes();
+  } catch (e) { showToast(String(e && e.message || '등록에 실패했습니다'), 4000); }
+}
+
+async function deleteWish() {
+  try {
+    if (!walletAddress) return;
+    const tokKey = 'wishTok_' + walletAddress.toLowerCase();
+    const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_del', {
+      method: 'POST',
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_wallet: walletAddress, p_token: (function(){ try { return localStorage.getItem(tokKey); } catch (_) { return null; } })() }),
+    });
+    if ((await r.text()).indexOf('denied') !== -1) { showToast('이 지갑의 희망글은 다른 기기에서 등록됐습니다. 그 기기에서 내리거나 [문의]로 요청해주세요', 4500); return; }
+    try { localStorage.removeItem(tokKey); } catch (_) {}
+    showToast('매수 희망을 내렸습니다');
+    loadBuyWishes();
+  } catch {}
+}
+
 function onWalletConnected() {
   // 헤더 표시
   document.getElementById('mainHeader').style.display = 'flex';
   document.getElementById('tabBar').style.display = 'flex';
-  document.getElementById('kakaoCsBtn').style.display = 'flex';
 
   // 주소 표시 (앞 6자리, 뒤 4자리 강조)
   const addr = walletAddress;
@@ -1240,6 +1501,9 @@ function onWalletConnected() {
 
   // 거래 목록 갱신
   loadUserTrades();
+
+  // 알림 버튼 표시 (지원 환경에서만) + 열쇠가 바뀐 경우 자동 재등록
+  try { if (pushSupported()) { renderPushBtn(); ensureFreshPushSub(); } } catch {}
 
   // 계정/네트워크 변경 감지 (window.ethereum 이벤트로 처리됨)
 }
@@ -1538,10 +1802,10 @@ async function _createTradeFlowInner() {
   syncAutoRate();
 
   if (!mpcAmt || !pricePerMpc || !krwPerUsdt) { showToast('모든 항목을 입력해주세요'); return; }
-  if (mpcAmt <= 0)       { showError('MPC 수량은 0보다 커야 합니다.'); return; }
+  if (mpcAmt <= 0)       { showError('판매할 MPC 수량을 입력해주세요.'); return; }
   if (mpcAmt < CONFIG.MIN_MPC) { showError(`❌ 최소 거래 수량은 ${CONFIG.MIN_MPC.toLocaleString()} MPC입니다.`); return; }
-  if (pricePerMpc <= 0)  { showError('MPC 단가는 0보다 커야 합니다.'); return; }
-  if (krwPerUsdt <= 0)   { showError('USDT 환율은 0보다 커야 합니다.'); return; }
+  if (pricePerMpc <= 0)  { showError('MPC 단가를 입력해주세요.'); return; }
+  if (krwPerUsdt <= 0)   { showError('USDT 환율을 입력해주세요.'); return; }
   if (pricePerMpc < CONFIG.MIN_PRICE) { showError(`❌ MPC 1개당 최소 가격은 ${CONFIG.MIN_PRICE}원입니다.`); return; }
   if (pricePerMpc % 50 !== 0) { showError('❌ MPC 단가는 50원 단위로 입력해주세요.<br>예: 500, 550, 600...'); return; }
   if (krwPerUsdt % 10 !== 0)  { showError('❌ USDT 환율은 10원 단위로 입력해주세요.<br>예: 1460, 1470...'); return; }
@@ -1549,7 +1813,7 @@ async function _createTradeFlowInner() {
     showError(`❌ 환율은 실시간 환율(${liveKrwRate.toLocaleString()}원)의 ±10% 이내로만 입력할 수 있습니다.`);
     return;
   }
-  if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도 10만 MPC 초과'); return; }
+  if (mpcAmt > CONFIG.MAX_MPC) { showToast('최대 거래 한도는 10만 MPC입니다'); return; }
 
   // pricePerMpc는 원화 단가; 컨트랙트엔 USDT 단가 필요
   const pricePerMpcUsdt = pricePerMpc / krwPerUsdt;
@@ -1801,7 +2065,7 @@ function showExpiredPage() {
 // ── 구매자 예치 플로우 ────────────────────────────────────────────────────
 async function buyDepositFlow() {
   if (!requireWallet()) return;
-  if (!currentTradeId) { showError('거래 ID가 없습니다'); return; }
+  if (!currentTradeId) { showError('거래 링크가 올바르지 않습니다. 판매자에게 받은 링크로 다시 접속해주세요.'); return; }
 
   // 조회 4건을 미리 병렬로 시작 — 주소 확인 팝업을 읽는 동안 완료됨 (대기 단축)
   const preload = Promise.all([
@@ -1904,7 +2168,7 @@ async function buyDepositFlow() {
 // ── 취소 플로우 ────────────────────────────────────────────────────────────
 async function cancelTradeFlow() {
   const tradeId = currentTradeId;
-  if (!tradeId) { showError('거래 ID를 찾을 수 없습니다.'); return; }
+  if (!tradeId) { showError('거래 링크가 올바르지 않습니다. 판매자에게 받은 링크로 다시 접속해주세요.'); return; }
 
   const ok = await showConfirm('거래 취소', '거래를 취소하면 양측 모두 즉시 환불됩니다.<br>취소하시겠습니까?');
   if (!ok) return;
@@ -2012,6 +2276,15 @@ async function checkTradeAlerts() {
       t.status === 'PENDING' && t.createdAt && now - t.createdAt > CONFIG.TRADE_TIMEOUT * 1000);
     const showReturn = needReturn.length > 0 && !window._returnAlertShown;
 
+    // 만료 3시간 전 거래 (아직 안 팔렸고 곧 만료되는 내 판매글)
+    const expSoon = mine.filter(t =>
+      t.status === 'PENDING' && t.createdAt &&
+      now - t.createdAt <= CONFIG.TRADE_TIMEOUT * 1000 &&
+      now - t.createdAt >  (CONFIG.TRADE_TIMEOUT - 3 * 3600) * 1000);
+
+    // 상단 고정 배너 (닫기 전까지 유지 — 1회성 알림창과 별개)
+    renderActionBanner(needReturn, expSoon);
+
     if (newDone.length === 0 && !showReturn) return;
 
     let html = '';
@@ -2046,6 +2319,32 @@ async function checkTradeAlerts() {
   } catch { /* 알림 실패는 기능에 영향 없음 */ }
 }
 
+// ── 상단 고정 행동 배너: 반환 대기 / 만료 임박 (접속해 있는 동안 계속 보임) ──
+function renderActionBanner(needReturn, expSoon) {
+  const old = document.getElementById('actionBanner');
+  if (old) old.remove();
+  if ((!needReturn || !needReturn.length) && (!expSoon || !expSoon.length)) return;
+  const bar = document.createElement('div');
+  bar.id = 'actionBanner';
+  bar.style.cssText = 'position:sticky;top:0;z-index:350;background:#2a2200;border-bottom:1px solid var(--gold);padding:10px 14px;font-size:13px;line-height:1.6;color:#ffe9b0';
+  let html = '';
+  if (needReturn && needReturn.length) {
+    const mpc = needReturn.reduce((s, t) => s + (t.mpcAmt || 0), 0);
+    html += `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span style="flex:1">⏰ <strong>반환 대기 ${needReturn.length}건</strong> (${mpc.toLocaleString()} MPC) — 만료된 판매글의 MPC가 기다리고 있습니다.</span>
+      <button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="showTab('status')">지금 찾아가기</button></div>`;
+  }
+  if (expSoon && expSoon.length) {
+    const soonest = Math.min(...expSoon.map(t => t.createdAt + CONFIG.TRADE_TIMEOUT * 1000));
+    const remainH = Math.max(0, (soonest - Date.now()) / 3600000);
+    const remainTxt = remainH >= 1 ? Math.floor(remainH) + '시간' : Math.max(1, Math.round(remainH * 60)) + '분';
+    html += `<div style="margin-top:${needReturn && needReturn.length ? '6px' : '0'}">
+      ⏳ 판매글 ${expSoon.length}건이 <strong>약 ${remainTxt} 후 만료</strong>됩니다. 만료되면 [진행 중] 탭에서 반환 버튼으로 찾아가시면 됩니다.</div>`;
+  }
+  bar.innerHTML = html;
+  document.body.prepend(bar);
+}
+
 async function recoverTradesFromChain() {
   try {
     // 조회는 공용 RPC 우선 (지갑 노드 401 시 내역 복구가 조용히 실패하는 것 방지)
@@ -2059,12 +2358,18 @@ async function recoverTradesFromChain() {
     const local = getLocalTrades();
     let changed = false;
 
-    for (const tradeId of tradeIds) {
-      // 이미 로컬에 있으면 skip
-      if (local[tradeId]) continue;
+    // 체인 조회를 10건씩 병렬로 (순차 조회 시 50건에 20초 이상 걸리던 것 단축, 2026-10)
+    const toFetch = tradeIds.filter(id => !local[id]);
+    const fetched = new Map();
+    for (let i = 0; i < toFetch.length; i += 10) {
+      const batch = toFetch.slice(i, i + 10);
+      const results = await Promise.all(batch.map(id => rc.getTrade(id).catch(() => null)));
+      batch.forEach((id, k) => { if (results[k]) fetched.set(id, results[k]); });
+    }
 
-      // 체인에서 거래 정보 가져오기
-      const t = await rc.getTrade(tradeId);
+    for (const tradeId of toFetch) {
+      const t = fetched.get(tradeId);
+      if (!t) continue;
       const statusArr = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'];
       const status = statusArr[Number(t.status)] || 'NONE';
       if (status === 'NONE' || status === 'COMMITTED') continue;
@@ -2105,6 +2410,8 @@ async function recoverTradesFromChain() {
 async function fetchMarketLogs(fromBlock, toBlock, topics) {
   const filter = { address: CONFIG.ESCROW_PROXY, topics: [topics] };
   const strategies = [
+    // (2026-10 확인: 전용 노드도 로그 조회는 1만 블록 제한 — "전체 범위 한 번에" 전략은 제거.
+    //  전용 노드 + ① 병렬이면 24시간 범위 0.8초로 충분)
     async (lp) => { // ① 9,500블록씩 동시 조회 (QuickNode 1만 블록 제한 준수, 2026-07 정책 변경)
       const ranges = [];
       for (let f = fromBlock; f <= toBlock; f += 9500) ranges.push([f, Math.min(f + 9499, toBlock)]);
@@ -2199,6 +2506,7 @@ function marketItemsFromCache(cache) {
 
 // ── 장터 (매도 목록) ──────────────────────────────────────────────────────
 async function loadMarket() {
+  loadBuyWishes(); // 매수 희망 목록도 함께 갱신 (장터 진입·새로고침 시)
   const el = document.getElementById('marketList');
   const btn = document.getElementById('btnMarketRefresh');
   if (!el) return;
@@ -2374,9 +2682,11 @@ function renderMarket() {
     </div>` : '';
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const wishMax = (window._buyWishes || []).reduce((m, w) => Math.max(m, Number(w.price_krw) || 0), 0);
   el.innerHTML = pageItems.map(it => {
     const totalKrw = Math.round(it.usdt * it.krw);
     const unitKrw  = it.mpcAmt > 0 ? Math.round(totalKrw / it.mpcAmt) : 0;
+    const wishHit  = unitKrw > 0 && wishMax >= unitKrw; // 매수 희망가 이하로 나온 판매글
     const isMine = walletAddress && it.seller.toLowerCase() === walletAddress.toLowerCase();
     const until = nowSec + it.remain; // 만료 시각 (초)
     const buyBtn = isMine
@@ -2385,7 +2695,7 @@ function renderMarket() {
       : `<button class="btn btn-sm btn-success" style="margin-top:10px;width:100%" onclick="buyFromMarket('${it.tradeId}')">🛒 구매하기</button>`;
     return `<div class="trade-item">
       <div class="trade-item-header">
-        <span class="badge badge-pending">판매 중</span>
+        <span class="badge badge-pending">판매 중</span>${wishHit ? '<span class="badge" style="background:#1d3a1d;color:#7ddb7d;margin-left:6px">💰 매수자 있음</span>' : ''}
         <span style="font-size:12px;color:var(--text3)" data-mkt-until="${until}">⏱ ${fmtRemain(it.remain)} 남음</span>
       </div>
       <div class="trade-item-amounts">
@@ -2509,7 +2819,7 @@ function copyTradeLink(tradeId) {
   navigator.clipboard.writeText(pageUrl).then(() => {
     showToast('✅ 링크 복사 완료! 카카오톡으로 전송하세요');
   }).catch(() => {
-    showError('링크 복사에 실패했습니다.<br>직접 복사하세요:<br><br><small style="word-break:break-all">' + pageUrl + '</small>');
+    showError('링크 복사에 실패했습니다.<br>아래 주소를 길게 눌러 복사해주세요:<br><br><small style="word-break:break-all">' + pageUrl + '</small>');
   });
 }
 
@@ -2945,6 +3255,10 @@ function showError(msg) {
   document.getElementById('modalErrorBody').innerHTML = msg;
   // 실제 오류(parseError 경유)일 때만 "오류 정보 복사" 영역 표시 (입력값 안내 등에는 불필요)
   const fresh = window._lastErrDiag && Date.now() - window._lastErrDiag.at < 8000;
+  // 원인이 분류된 오류는 제목부터 원인을 말한다 (POL 부족 / 서명 거절 / 네트워크 다름)
+  document.getElementById('modalErrorTitle').textContent =
+    (fresh && window._lastErrDiag.title) ? window._lastErrDiag.title : '⚠️ 오류 발생';
+  if (fresh && window._lastErrDiag.title) window._lastErrDiag.title = null; // 제목은 1회용 — 뒤이은 다른 안내창에 남지 않게
   document.getElementById('errDiagArea').style.display = fresh ? 'block' : 'none';
   if (fresh) {
     showErrReportBox(); // 신고 전문을 즉시 표시 — 복사 버튼이 안 눌리는 기기도 캡처/수동복사 가능
@@ -3131,69 +3445,88 @@ function parseError(err) {
     msg.toLowerCase().includes('rejected by user') ||
     msg.toLowerCase().includes('cancelled by user')
   ) {
-    return '✋ 서명을 취소했습니다. 거래를 다시 진행하려면 버튼을 다시 눌러주세요.';
+    window._lastErrDiag.title = '지갑에서 서명 거절/시간 초과';
+    return '앱 고장이 아닙니다. 지갑에서 서명이 완료되지 않았습니다.<br><br>지갑 서명 창에서 <strong>[거절]을 눌렀거나, 비밀번호 입력이 늦어 시간이 지나면</strong> 이렇게 됩니다.<br><br>버튼을 다시 누르고, 지갑 창이 뜨면 <strong>바로 승인</strong>해주세요.';
   }
 
   // Trust Wallet 앱 자체 내부 오류 (안드로이드 Java 예외 등) — 지갑 앱 업데이트 필요
   if (/Java exception|onRequest|method invocation/i.test(msg)) {
+    window._lastErrDiag.title = '지갑 앱 자체 오류';
     return '❌ Trust Wallet 앱 자체 오류입니다. (저희 서비스 문제가 아닙니다)<br><br>1. Play 스토어(앱스토어)에서 <strong>Trust Wallet을 최신 버전으로 업데이트</strong><br>2. 휴대폰을 재시작<br>3. 다시 접속해서 시도<br><br>그래도 반복되면 카카오 문의를 이용해주세요.';
   }
   // 지갑 앱 노드 오류 (401/403/429 등) — 원문 노출 대신 행동 안내 + 예비 연결 방식 제공
   if (/RPC HTTP|401|403|429|rate limit|too many request/i.test(msg)) {
     if (typeof window.ethereum !== 'undefined') { try { markTwNodeBad(); } catch {} } // 문제 기기로 기억 → 다음부터 선제 배너
+    window._lastErrDiag.title = '지갑 앱 연결 불안정';
     return '❌ 지갑 앱의 네트워크 연결이 불안정합니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 와이파이 ↔ 모바일 데이터 전환<br>3. 다시 시도<br><br>계속 반복되면 아래 버튼으로 <strong>예비 연결 방식</strong>을 사용해보세요. (Trust Wallet 앱의 문제 구간을 우회합니다)<br><br><button class="btn btn-sm btn-outline" style="width:100%" onclick="closeModal(\'modalError\');altConnectEntry()">🔁 예비 연결 방식으로 다시 연결</button>';
   }
   // 예비 연결(WalletConnect) 세션 오류 — 재연결 안내
   if (/session (expired|topic|not found)|proposal expired|pairing|relayer/i.test(msg)) {
-    return '❌ 예비 연결이 끊어졌습니다.<br><br>연결 화면의 <strong>[연결이 안 되나요? 예비 연결 방식]</strong> 버튼으로 다시 연결한 뒤 시도해주세요.';
+    window._lastErrDiag.title = '지갑 연결 끊김';
+    return '❌ 연결이 끊어졌습니다.<br><br>연결 화면의 <strong>[지갑 연결하기]</strong> 버튼으로 다시 연결한 뒤 시도해주세요.';
   }
   if (/wallet timeout/i.test(msg)) {
+    window._lastErrDiag.title = '지갑에서 서명 거절/시간 초과';
     return '❌ Trust Wallet이 서명 창을 띄우지 못했습니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. Play 스토어(앱스토어)에서 Trust Wallet 업데이트 확인<br>3. 다시 시도<br><br>반복되면 아래 [오류 정보 복사]로 카카오 문의해주세요.';
   }
+  // 네트워크가 폴리곤이 아님 (ensurePolygonNetwork 실패 — 안내문이 이미 한국어로 작성돼 있음)
+  if (msg.includes('폴리곤(Polygon)으로 확인하지 못했습니다')) {
+    window._lastErrDiag.title = '네트워크가 폴리곤이 아님';
+    return msg;
+  }
+  // 수수료 코인(POL) 부족 — "insufficient funds"는 수수료용 기본 코인 부족을 뜻한다 (토큰 부족과 별개)
+  if (/insufficient funds/i.test(msg)) {
+    window._lastErrDiag.title = '수수료 코인(POL) 부족';
+    return '앱 고장이 아닙니다. 지갑에 <strong>수수료용 POL 코인</strong>이 모자라서 멈춘 것입니다. (MPC·USDT와 별개로, 폴리곤에서는 모든 거래에 POL이 수수료로 조금씩 듭니다)<br><br>지갑에 POL을 충전한 후 다시 시도해주세요.';
+  }
   if (/below minimum|underpriced|tip cap/i.test(msg)) {
+    window._lastErrDiag.title = '네트워크 수수료 일시 상승';
     return '❌ 네트워크 수수료 기준이 일시적으로 높아졌습니다. 잠시 후 다시 시도해주세요.';
   }
 
+  // 각 항목: [팝업 제목, 안내 본문]
   const map = {
     // ── 가스·잔액 ──
-    'insufficient funds':      '❌ 가스비(POL)가 부족합니다. 지갑에 POL을 충전 후 다시 시도해주세요.',
-    'insufficient':            '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.',
-    'gas':                     '❌ 가스비 오류입니다. POL 잔액을 확인하거나 잠시 후 다시 시도해주세요.',
+    'insufficient':            ['잔액 부족', '❌ 잔액이 부족합니다. MPC 또는 USDT 잔액을 확인해주세요.'],
+    'gas':                     ['수수료(가스) 오류', '❌ 가스비 오류입니다. POL 잔액을 확인하거나 잠시 후 다시 시도해주세요.'],
     // ── 네트워크 ──
-    'network':                 '❌ 네트워크 오류입니다. 인터넷 연결을 확인하고 다시 시도해주세요.',
-    'timeout':                 '❌ 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.',
-    'fetch':                   '❌ 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.',
+    'network':                 ['인터넷 연결 오류', '❌ 네트워크 오류입니다. 인터넷 연결을 확인하고 다시 시도해주세요.'],
+    'timeout':                 ['응답 시간 초과', '❌ 응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.'],
+    'fetch':                   ['서버 연결 실패', '❌ 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.'],
     // ── 컨트랙트 revert (영어 원문 그대로 매핑) ──
-    'Trade expired':           '❌ 거래 시간이 만료됐습니다 (24시간 초과).\n판매자에게 새 링크를 요청하세요.',
-    'Trade not pending':       '❌ 이미 처리된 거래입니다.',
-    'Trade not active':        '❌ 거래가 활성 상태가 아닙니다.',
-    'Trade not found':         '❌ 거래를 찾을 수 없습니다. 링크를 다시 확인하세요.',
-    'Seller cannot be buyer':  '❌ 판매자 본인은 구매할 수 없습니다.',
-    'Buyer already set':       '❌ 이미 다른 구매자가 참여한 거래입니다. 판매자에게 문의하세요.',
-    'Too early':               '❌ 아직 거래 참여가 불가합니다. 잠시 후 다시 시도해주세요.',
-    'Only PENDING can expire': '❌ 이미 처리(반환/완료)된 거래입니다. 내역 탭에서 상태를 확인해주세요.',
-    'Cannot cancel':           '❌ 이미 처리(반환/완료)된 거래라 취소할 수 없습니다. 내역 탭에서 상태를 확인해주세요.',
-    'Not a participant':       '❌ 이 거래의 판매자 지갑이 아닙니다.<br><br>판매 글을 올렸던 지갑으로 Trust Wallet에서 지갑을 전환한 뒤 다시 시도해주세요.',
-    'Trade does not exist':    '❌ 거래를 찾을 수 없습니다. 링크가 올바른지 확인해주세요.',
-    'Not expired yet':         '❌ 아직 판매 시간(24시간)이 지나지 않았습니다. 만료 전에는 "거래 취소"로 MPC를 돌려받을 수 있습니다.',
-    'Exceeds 100k MPC limit':  '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.',
-    'MPC amount must be':      '❌ MPC 수량이 올바르지 않습니다.',
-    'Price must be':           '❌ 거래 단가가 올바르지 않습니다. 가격을 다시 입력해주세요.',
-    'Rate must be':            '❌ 환율이 올바르지 않습니다. 환율을 다시 입력해주세요.',
-    'MPC transfer failed':     '❌ MPC 전송에 실패했습니다. MPC 잔액과 Approve를 확인해주세요.',
-    'USDT transfer failed':    '❌ USDT 전송에 실패했습니다. USDT 잔액과 Approve를 확인해주세요.',
-    'MPC payout failed':       '❌ MPC 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.',
-    'USDT payout failed':      '❌ USDT 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.',
-    'MPC amount mismatch':     '❌ MPC 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.',
-    'USDT amount mismatch':    '❌ USDT 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.',
-    'Invalid reveal':          '❌ 거래 검증 실패입니다. 카카오 문의를 이용해주세요.',
-    'Commit already used':     '❌ 이미 사용된 거래 코드입니다. 새로 거래를 생성해주세요.',
-    'Reentrant call':          '❌ 중복 요청이 감지됐습니다. 잠시 후 다시 시도해주세요.',
-    'Seller only':             '❌ 판매자만 이 작업을 할 수 있습니다.',
-    'Multisig only':           '❌ 권한이 없습니다.',
+    'Trade expired':           ['거래 시간 만료', '❌ 거래 시간이 만료됐습니다 (24시간 초과).\n판매자에게 새 링크를 요청하세요.'],
+    'Trade not pending':       ['이미 처리된 거래', '❌ 이미 처리된 거래입니다.'],
+    'Trade not active':        ['거래 상태 오류', '❌ 거래가 활성 상태가 아닙니다.'],
+    'Trade not found':         ['거래를 찾을 수 없음', '❌ 거래를 찾을 수 없습니다. 링크를 다시 확인하세요.'],
+    'Seller cannot be buyer':  ['본인 글은 구매 불가', '❌ 판매자 본인은 구매할 수 없습니다.'],
+    'Buyer already set':       ['이미 구매자가 있는 거래', '❌ 이미 다른 구매자가 참여한 거래입니다. 판매자에게 문의하세요.'],
+    'Too early':               ['잠시 후 참여 가능', '❌ 아직 거래 참여가 불가합니다. 잠시 후 다시 시도해주세요.'],
+    'Only PENDING can expire': ['이미 처리된 거래', '❌ 이미 처리(반환/완료)된 거래입니다. 내역 탭에서 상태를 확인해주세요.'],
+    'Cannot cancel':           ['취소할 수 없는 거래', '❌ 이미 처리(반환/완료)된 거래라 취소할 수 없습니다. 내역 탭에서 상태를 확인해주세요.'],
+    'Not a participant':       ['판매자 지갑이 아님', '❌ 이 거래의 판매자 지갑이 아닙니다.<br><br>판매 글을 올렸던 지갑으로 Trust Wallet에서 지갑을 전환한 뒤 다시 시도해주세요.'],
+    'Trade does not exist':    ['거래를 찾을 수 없음', '❌ 거래를 찾을 수 없습니다. 링크가 올바른지 확인해주세요.'],
+    'Not expired yet':         ['아직 만료 전', '❌ 아직 판매 시간(24시간)이 지나지 않았습니다. 만료 전에는 "거래 취소"로 MPC를 돌려받을 수 있습니다.'],
+    'Exceeds 100k MPC limit':  ['거래 한도 초과', '❌ 최대 거래 한도(10만 MPC)를 초과했습니다.'],
+    'MPC amount must be':      ['입력값 오류', '❌ MPC 수량이 올바르지 않습니다.'],
+    'Price must be':           ['입력값 오류', '❌ 거래 단가가 올바르지 않습니다. 가격을 다시 입력해주세요.'],
+    'Rate must be':            ['입력값 오류', '❌ 환율이 올바르지 않습니다. 환율을 다시 입력해주세요.'],
+    'MPC transfer failed':     ['MPC 전송 실패', '❌ MPC 전송에 실패했습니다. MPC 잔액과 Approve를 확인해주세요.'],
+    'USDT transfer failed':    ['USDT 전송 실패', '❌ USDT 전송에 실패했습니다. USDT 잔액과 Approve를 확인해주세요.'],
+    'MPC payout failed':       ['처리 오류 — 문의 필요', '❌ MPC 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.'],
+    'USDT payout failed':      ['처리 오류 — 문의 필요', '❌ USDT 지급 중 오류가 발생했습니다. 카카오 문의를 이용해주세요.'],
+    'MPC amount mismatch':     ['처리 오류 — 문의 필요', '❌ MPC 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.'],
+    'USDT amount mismatch':    ['처리 오류 — 문의 필요', '❌ USDT 수량 불일치 오류입니다. 카카오 문의를 이용해주세요.'],
+    'Invalid reveal':          ['처리 오류 — 문의 필요', '❌ 거래 검증 실패입니다. 카카오 문의를 이용해주세요.'],
+    'Commit already used':     ['이미 사용된 거래 코드', '❌ 이미 사용된 거래 코드입니다. 새로 거래를 생성해주세요.'],
+    'Reentrant call':          ['중복 요청', '❌ 중복 요청이 감지됐습니다. 잠시 후 다시 시도해주세요.'],
+    'Seller only':             ['판매자 전용 기능', '❌ 판매자만 이 작업을 할 수 있습니다.'],
+    'Multisig only':           ['권한 없음', '❌ 권한이 없습니다.'],
   };
   for (const [key, val] of Object.entries(map)) {
-    if (msg.toLowerCase().includes(key.toLowerCase())) return val;
+    if (msg.toLowerCase().includes(key.toLowerCase())) {
+      window._lastErrDiag.title = val[0];
+      return val[1];
+    }
   }
   return `❌ 오류: ${msg}<br><br>문제가 반복되면 카카오 문의를 이용해주세요.`;
 }
@@ -3211,8 +3544,9 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
     s.onerror = function() { if (fallback) loadEthers(fallback); };
     document.head.appendChild(s);
   }
+  // 우리 서버 내장본 우선 (CDN 장애·변조 영향 차단), 실패 시에만 외부 CDN
   loadEthers(
-    'https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js',
+    'vendor/ethers-5.7.2.umd.min.js',
     'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js'
   );
 })();
