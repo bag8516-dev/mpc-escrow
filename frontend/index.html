@@ -491,6 +491,17 @@ function installApp() {
     <!-- 신뢰 배지: 매일 아침 자동 장부 검증 결과 (2026-10) -->
     <div id="auditBadge" style="display:none;margin:12px 16px 0;background:#102a18;border:1px solid #2e5c3a;border-radius:10px;padding:9px 12px;font-size:12px;color:#8fdba8"></div>
 
+    <!-- 커뮤니티 시세판 (2026-10): 완결 거래 기준, 매일 아침 갱신 -->
+    <div id="marketPanel" style="display:none;margin:12px 16px 0;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <strong style="color:var(--gold);font-size:14px">📊 커뮤니티 시세</strong>
+        <span id="mkUpdated" style="font-size:11px;color:var(--text3)"></span>
+      </div>
+      <div id="mkSummary" style="font-size:13px;color:var(--text2);margin-bottom:8px"></div>
+      <div id="mkRecent" style="font-size:12px;color:var(--text3);line-height:1.9"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">* 에스크로에서 실제 완결된 거래만 집계합니다 (매일 아침 갱신)</div>
+    </div>
+
     <!-- 매수 희망 게시판 (2026-10): 사는 쪽 수요가 보이게 -->
     <div style="margin:14px 16px 0;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -834,7 +845,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101102';
+const APP_VERSION = '2026101104';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -967,6 +978,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
   loadBuyWishes();   // 매수 희망 목록 (장터 배지·판매 힌트용)
   loadAuditBadge();  // 장부 검증 신뢰 배지
+  loadMarketStats(); // 커뮤니티 시세판
   // 모바일 전체: 연결 모듈을 접속하자마자 미리 받아둠 (첫 탭에 바로 연결되게, 2026-10 개편)
   try {
     if (/Android|iPhone|iPad/i.test(navigator.userAgent) && typeof window.ethereum === 'undefined') loadWcLib().catch(() => {});
@@ -1260,6 +1272,46 @@ function pushB64ToU8(b) {
 function pushSupported() {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
+// 거래 완료 공유 카드: 캔버스로 이미지 생성 → 공유(미지원 시 저장)
+async function shareTradeCard(mpc, usdt, createdAt, tradeId) {
+  try {
+    const W = 560, H = 700, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0d1424'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = 'rgba(212,175,55,.65)'; x.lineWidth = 2; x.strokeRect(14, 14, W - 28, H - 28);
+    x.strokeStyle = 'rgba(212,175,55,.25)'; x.lineWidth = 1; x.strokeRect(22, 22, W - 44, H - 44);
+    x.fillStyle = '#d4af37'; x.font = '700 30px sans-serif'; x.textAlign = 'center';
+    x.fillText('MPC 에스크로', W / 2, 92);
+    x.fillStyle = '#8fa3c8'; x.font = '15px sans-serif';
+    x.fillText('블록체인 안전거래 · 거래 완료 증명', W / 2, 122);
+    x.strokeStyle = 'rgba(212,175,55,.3)'; x.beginPath(); x.moveTo(60, 150); x.lineTo(W - 60, 150); x.stroke();
+    x.fillStyle = '#eef2fa'; x.font = '700 44px sans-serif';
+    x.fillText((+mpc).toLocaleString() + ' MPC', W / 2, 240);
+    x.fillStyle = '#d4af37'; x.font = '28px sans-serif'; x.fillText('↕', W / 2, 288);
+    x.fillStyle = '#4ade80'; x.font = '700 40px sans-serif';
+    x.fillText((+usdt).toFixed(1) + ' USDT', W / 2, 345);
+    x.fillStyle = '#8fa3c8'; x.font = '15px sans-serif';
+    x.fillText('동시 맞교환 완료 — 먼저 보내고 못 받는 구조 없음', W / 2, 400);
+    const d = createdAt ? new Date(createdAt) : new Date();
+    x.fillText(d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + ' 거래', W / 2, 430);
+    x.fillStyle = '#5a7090'; x.font = '13px sans-serif';
+    x.fillText('이 거래는 폴리곤 블록체인에 영구 기록되어', W / 2, 560);
+    x.fillText('누구나 검증할 수 있습니다', W / 2, 582);
+    x.fillStyle = '#d4af37'; x.font = '700 15px sans-serif';
+    x.fillText('bag8516-dev.github.io/mpc-escrow', W / 2, 628);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    const file = new File([blob], 'mpc-escrow-trade.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'MPC 에스크로 거래 완료' });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'mpc-escrow-trade.png'; a.click();
+      showToast('카드 이미지를 저장했습니다. 카톡에 올려 공유해보세요!');
+    }
+  } catch (e) { if (String(e && e.name) !== 'AbortError') showToast('카드 생성에 실패했습니다'); }
+}
+
 function renderPushBtn() {
   let btn = document.getElementById('pushBellBtn');
   if (!btn) {
@@ -1384,6 +1436,27 @@ async function loadBuyWishes() {
         + '</div>';
     }).join('');
   } catch { el.innerHTML = '<div style="color:var(--text3);padding:6px 0">목록을 불러오지 못했습니다. 새로고침 해주세요.</div>'; }
+}
+
+
+// 커뮤니티 시세판: 완결 거래 집계(market.json, 매일 아침 점검이 발행)
+async function loadMarketStats() {
+  try {
+    const r = await fetch('https://bag8516-dev.github.io/market.json?t=' + Math.floor(Date.now() / 3600000));
+    if (!r.ok) return;
+    const m = await r.json();
+    if (!m || !Array.isArray(m.recent) || m.recent.length === 0) return;
+    const el = document.getElementById('marketPanel');
+    document.getElementById('mkUpdated').textContent = (m.updated || '').slice(0, 10) + ' 기준';
+    const rec = m.recent.slice(0, 5);
+    const avg = m.avg30 ? Math.round(m.avg30).toLocaleString() + '원' : '—';
+    document.getElementById('mkSummary').innerHTML =
+      `최근 30일 평균 <strong style="color:var(--gold)">1 MPC ≈ ${avg}</strong> · 완결 ${m.count30 || rec.length}건`;
+    document.getElementById('mkRecent').innerHTML = rec.map(t =>
+      `<div style="display:flex;justify-content:space-between"><span>${t.d} · ${(+t.mpc).toLocaleString()} MPC</span><strong style="color:var(--text2)">개당 ${(+t.unitKrw).toLocaleString()}원</strong></div>`
+    ).join('');
+    el.style.display = 'block';
+  } catch (_) {}
 }
 
 // 신뢰 배지: 매일 아침 자동 장부 검증(잠긴 수량=보관 수량) 결과 표시 (2026-10)
@@ -1932,6 +2005,17 @@ async function _createTradeFlowInner() {
 
     await callRevealAndDeposit(tradeId, mpcWei, priceWei, krwInt, secretHex);
     clearRegDraft(); // 등록 완료 — 이어하기 임시저장 제거
+
+    // 알림 미가입자에게 1회 제안 (구매자 입금·판매 완료·반환 안내를 폰으로)
+    try {
+      if (localStorage.getItem('esc_push_on') !== '1' && !localStorage.getItem('esc_push_asked') && pushSupported()) {
+        localStorage.setItem('esc_push_asked', '1');
+        const want = await showConfirm('🔔 알림 받기',
+          '구매자가 입금하면 <strong>폰 알림으로 바로</strong> 알려드릴까요?<br>' +
+          '<span style="font-size:12px;color:var(--text3)">판매 완료·만료 반환 안내도 함께 옵니다. 언제든 끌 수 있습니다.</span>');
+        if (want) await togglePush();
+      }
+    } catch (_) {}
 
     // 7. 체인에서 거래 존재 확인 (잘못된 링크 방지) — 최대 3회 재시도
     let verifyTrade = null;
@@ -2789,6 +2873,8 @@ function tradeItemHtml(t) {
         <button class="btn btn-sm btn-outline" style="margin-top:6px" onclick="editPriceById('${t.tradeId}')">💰 가격 수정</button>
         <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="cancelTradeById('${t.tradeId}')">거래 취소 및 반환</button>`;
     }
+  } else if (t.status === 'COMPLETED') {
+    buttons = `<button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="shareTradeCard(${t.mpcAmt||0}, ${t.usdtCeil||0}, ${t.createdAt||0}, '${(t.tradeId||'').replace(/[^0-9a-fx]/gi,'')}')">📸 완료 카드 공유</button>`;
   } else if (t.status === 'ACTIVE') {
     // 자동 확정 컨트랙트에서는 ACTIVE 상태가 발생하지 않지만 구버전 거래 대비
     buttons = `

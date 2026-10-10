@@ -126,13 +126,20 @@ const num = v => Number(ethers.formatUnits(v, 18));
       : [];
     const evLogs = [...cache.logs, ...newLogs];
     const openTrades = new Map();   // tradeId → { amount, block }  (아직 안 끝난 거래)
+    const revealInfo = new Map();   // tradeId → { mpc, usdt, krw }  (시세 집계용)
+    const completions = [];         // { id, block }
     let revealed = 0, done = 0;
     for (const l of evLogs) {
       const id = l.topics[1];
       if (l.topics[0] === REVEALED) {
         openTrades.set(id, { amount: BigInt('0x' + l.data.slice(2, 66)), block: l.blockNumber, seller: '0x' + l.topics[2].slice(26) });
+        revealInfo.set(id, {
+          mpc: Number(BigInt('0x' + l.data.slice(2, 66)) / 10n ** 18n),
+          usdt: Number(BigInt('0x' + l.data.slice(66, 130))) / 1e6,
+          krw: Number(BigInt('0x' + l.data.slice(130, 194))),
+        });
         revealed++;
-      } else if (l.topics[0] === COMPLETED) { openTrades.delete(id); done++; }
+      } else if (l.topics[0] === COMPLETED) { openTrades.delete(id); done++; completions.push({ id, block: l.blockNumber }); }
       else if (l.topics[0] === CANCELLED || l.topics[0] === EXPIRED) { openTrades.delete(id); }
     }
     let locked = 0n;
@@ -196,6 +203,36 @@ const num = v => Number(ethers.formatUnits(v, 18));
       if (expList.length > 12) console.log(`  …외 ${expList.length - 12}건`);
     }
 
+    // ── 커뮤니티 시세: 완결 거래 집계 → 홈페이지 market.json 발행 (앱·홈이 공용) ──
+    try {
+      const comp = [];
+      for (const cpl of completions) {
+        const ri = revealInfo.get(cpl.id);
+        if (!ri || !ri.mpc || !ri.usdt || !ri.krw) continue;
+        let ts2 = tsCache.get(cpl.block);
+        if (ts2 === undefined) { try { ts2 = (await p.getBlock(cpl.block)).timestamp; tsCache.set(cpl.block, ts2); } catch (_) {} }
+        if (!ts2) continue;
+        comp.push({ ts: ts2, mpc: ri.mpc, unitKrw: Math.round(ri.usdt * ri.krw / ri.mpc) });
+      }
+      comp.sort((a, b) => b.ts - a.ts);
+      const in30 = comp.filter(c => c.ts >= nowTs - 30 * 86400);
+      const avg30 = in30.length ? in30.reduce((s, c) => s + c.unitKrw * c.mpc, 0) / in30.reduce((s, c) => s + c.mpc, 0) : null;
+      const fmtD = t2 => new Date((t2 + 9 * 3600) * 1000).toISOString().slice(5, 10).replace('-', '.');
+      const marketData = {
+        updated: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10),
+        count30: in30.length, avg30: avg30 && Math.round(avg30),
+        recent: comp.slice(0, 10).map(c => ({ d: fmtD(c.ts), mpc: c.mpc, unitKrw: c.unitKrw })),
+      };
+      fs.writeFileSync('C:/Projects/mpc-landing/market.json', JSON.stringify(marketData));
+      const cp2 = require('child_process');
+      if (cp2.execSync('git -C C:/Projects/mpc-landing status --porcelain market.json').toString().trim()) {
+        cp2.execSync('git -C C:/Projects/mpc-landing add market.json');
+        cp2.execSync('git -C C:/Projects/mpc-landing commit -m "data: 커뮤니티 시세 갱신"');
+        cp2.execSync('git -C C:/Projects/mpc-landing push origin main');
+        console.log(`시세 발행: 완결 ${comp.length}건(30일 ${in30.length}건) → market.json 푸시`);
+      } else console.log('시세 발행: 변동 없음');
+    } catch (e) { console.log('⚠️ 시세 발행 실패:', e.message); }
+
     // 이어읽기 저장: 확정 구간(N−1,000 이전)의 이벤트와 블록시각만 기록
     try {
       const SAFE = N - 1000;
@@ -221,6 +258,12 @@ const num = v => Number(ethers.formatUnits(v, 18));
     console.log(r.ok ? '채팅방 서버: 정상 (깨우기 완료)' : `⚠️ 채팅방 서버 응답 이상: HTTP ${r.status}`);
     if (!r.ok) fail = true;
   } catch (e) { console.log('⚠️ 채팅방 서버 접속 실패:', e.message); fail = true; }
+
+  // ── 월간 리포트 재료: 하루 1줄 기록 (금고 폴더) ──
+  try {
+    fs.appendFileSync('C:/ssabom/appdata/audit-history.jsonl',
+      JSON.stringify({ d: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), ok: !fail, issues: issues.slice(0, 5) }) + '\n');
+  } catch (_) {}
 
   // ── 운영자 장애 알림: 이상 항목이 있으면 운영자 폰으로 즉시 푸시 ──
   // (발견→확인 간격을 줄이는 용도. 수정은 사람이 승인 — 자동 수정은 하지 않는다)
