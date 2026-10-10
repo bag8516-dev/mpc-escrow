@@ -69,7 +69,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
   try {
     const live = await (await fetch(LIVE + 'index.html?t=' + Math.floor(Math.random() * 1e9))).text();
     const local = require('child_process').execSync('git -C C:/Projects/mpc-escrow show gh-pages:index.html', { maxBuffer: 16 * 1024 * 1024 }).toString('utf8');
-    const norm = s => s.replace(/\r\n/g, '\n').replace(/\s+$/, '');
+    const norm = s => s.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\s+$/, ''); // BOM·개행 차이는 변조가 아님
     if (norm(live) !== norm(local)) { console.log('⚠️ 실서버 변조 의심: 배포된 index.html이 이 PC 정본과 다릅니다 — 무단 변경 또는 미배포 커밋. 즉시 확인 필요'); fail = true; }
     else console.log('변조 감시: 실서버 = 정본 일치');
   } catch (e) { console.log('⚠️ 변조 감시 실패:', e.message); fail = true; }
