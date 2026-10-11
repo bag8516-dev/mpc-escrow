@@ -17,12 +17,20 @@ const LANDING = 'C:/Projects/mpc-landing';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function getProvider() {
-  try {
-    const req = new ethers.FetchRequest(RPC_MAIN);
-    req.setHeader('Origin', 'https://mpcescrow.com');
-    return new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
-  } catch { return new ethers.JsonRpcProvider(RPC_FALLBACK, 137, { staticNetwork: true }); }
+const RPC_EXTRA = ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'];
+async function getProvider() {
+  // 1순위 전용 노드 → 안 되면 공용망 순서대로 (실제 호출로 생사 확인)
+  for (const url of [RPC_MAIN, RPC_FALLBACK, ...RPC_EXTRA]) {
+    try {
+      const req = new ethers.FetchRequest(url);
+      req.setHeader('Origin', 'https://mpcescrow.com');
+      const p = new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
+      await p.getBlockNumber();
+      if (url !== RPC_MAIN) console.log('조회망 전환:', url.split('/')[2]);
+      return p;
+    } catch (_) {}
+  }
+  throw new Error('모든 조회망 응답 없음');
 }
 
 // 토큰 배포 블록 탐색 (최초 1회): getCode 이진 탐색
@@ -64,7 +72,7 @@ async function getLogsRange(p, from, to, depth = 0) {
 }
 
 (async () => {
-  const p = getProvider();
+  const p = await getProvider();
   const latest = await p.getBlockNumber();
   const SAFE = latest - 30; // 체인 재구성 여유
 
