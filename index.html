@@ -730,11 +730,11 @@ const CONFIG = {
   // Polygon 메인넷: 137 / Mumbai 테스트넷: 80001
   CHAIN_ID:      137,
   CHAIN_NAME:    'Polygon',
-  RPC_URL:       'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (2026-10 도입, 무료 한도 일 300만)
+  RPC_URL:       'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (2026-10 도입, 무료 한도 일 300만)
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
   // 2026-10: Infura 전용 노드를 1순위로 — 공용 노드 상태에 따른 401/429/지연 오류 구조적 제거
   RPC_FALLBACKS: [
-    'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (1순위)
+    'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (1순위)
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
@@ -852,7 +852,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101108';
+const APP_VERSION = '2026101109';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
