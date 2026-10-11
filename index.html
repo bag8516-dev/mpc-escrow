@@ -737,12 +737,11 @@ const CONFIG = {
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
   // 2026-10: Infura 전용 노드를 1순위로 — 공용 노드 상태에 따른 401/429/지연 오류 구조적 제거
   RPC_FALLBACKS: [
-    'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (1순위)
+    // 2026-10-12 임시 순서: 인퓨라 설정 전파가 지역별로 덜 끝나 간헐 오류 → 전파 완료 확인 후 인퓨라 1순위 복귀
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
-    'https://1rpc.io/matic',
-    'https://polygon-pokt.nodies.app',          // 이벤트 250블록 제한 (비상용 청크 조회 가능)
+    'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (전파 끝나면 1순위 복귀)
   ],
   EXPLORER:      'https://polygonscan.com',
   NATIVE_TOKEN:  'POL',
@@ -855,7 +854,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101111';
+const APP_VERSION = '2026101112';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
