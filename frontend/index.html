@@ -855,7 +855,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101110';
+const APP_VERSION = '2026101111';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1113,6 +1113,27 @@ function loadWcLib() {
   });
 }
 
+// 살아 있는 조회망 고르기 — 지갑 연결이 조회망 하나에 안 기대게 (2026-10-11, 인퓨라 장애 대응)
+let __liveRpc = null;
+async function pickLiveRpc() {
+  if (__liveRpc) return __liveRpc;
+  for (const url of CONFIG.RPC_FALLBACKS) {
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch(url, {
+        method: 'POST', signal: ctl.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }),
+      });
+      clearTimeout(timer);
+      const j = await r.json();
+      if (j && j.result) { __liveRpc = url; return url; }
+    } catch (_) {}
+  }
+  return CONFIG.RPC_URL; // 전부 실패하면 기본값 (기존과 동일)
+}
+
 async function connectViaWalletConnect(btn) {
   try {
     setButtonLoading(btn, 'Trust Wallet 연결 준비 중...');
@@ -1123,7 +1144,7 @@ async function connectViaWalletConnect(btn) {
       wcProvider = await WCEP.init({
         projectId: CONFIG.WC_PROJECT_ID,
         chains: [CONFIG.CHAIN_ID],
-        rpcMap: { [CONFIG.CHAIN_ID]: CONFIG.RPC_URL }, // 조회·가스추정용 RPC — 전용 노드 사용 (기본 WC RPC 불안정 대비)
+        rpcMap: { [CONFIG.CHAIN_ID]: await pickLiveRpc() }, // 조회·가스추정용 RPC — 살아 있는 조회망 자동 선택 (2026-10-11)
         showQrModal: false,
         metadata: {
           name: 'MPC 에스크로',
@@ -1244,7 +1265,7 @@ async function ensurePolygonNetwork() {
           chainId: hexId,
           chainName: CONFIG.CHAIN_NAME,
           nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-          rpcUrls: [CONFIG.RPC_URL],
+          rpcUrls: [__liveRpc || CONFIG.RPC_URL],
           blockExplorerUrls: [CONFIG.EXPLORER],
         }],
       });
