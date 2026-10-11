@@ -854,7 +854,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101114';
+const APP_VERSION = '2026101115';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1010,6 +1010,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 공식 URL 표시
   document.getElementById('officialUrl').textContent = CONFIG.OFFICIAL_URL;
+
+  // 선제 청소 (2026-10-12, 1회): 옛 조회망이 박제된 예비 연결 저장분을 오류 나기 전에 전원 초기화
+  try {
+    if (!localStorage.getItem('wc_fresh_15')) {
+      purgeWcStorage();
+      localStorage.setItem('wc_fresh_15', '1');
+    }
+  } catch (_) {}
 
   // 홈 화면 설치 안내 (아이폰은 이벤트가 없어 여기서 직접 판단)
   setTimeout(maybeShowInstallBar, 800);
