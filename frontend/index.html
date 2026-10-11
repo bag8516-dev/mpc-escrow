@@ -854,7 +854,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101115';
+const APP_VERSION = '2026101116';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3687,7 +3687,7 @@ function parseError(err) {
   }
   if (/wallet timeout/i.test(msg)) {
     window._lastErrDiag.title = '지갑에서 서명 거절/시간 초과';
-    return '❌ Trust Wallet이 서명 창을 띄우지 못했습니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. Play 스토어(앱스토어)에서 Trust Wallet 업데이트 확인<br>3. 다시 시도<br><br>반복되면 아래 [오류 정보 복사]로 카카오 문의해주세요.';
+    return '❌ Trust Wallet이 서명 창을 띄우지 못했습니다.<br><br>1. Trust Wallet 앱을 완전히 종료 후 다시 실행<br>2. 다시 시도<br>3. 그래도 안 되면(최신 갤럭시에서 잦음): Trust Wallet을 종료한 채 <strong>홈 화면의 에스크로 앱(또는 삼성인터넷)</strong>으로 접속해 <strong>[예비 연결 방식]</strong>으로 다시 시도하세요<br><br>반복되면 아래 [오류 정보 복사]로 카카오 문의해주세요.';
   }
   // 네트워크가 폴리곤이 아님 (ensurePolygonNetwork 실패 — 안내문이 이미 한국어로 작성돼 있음)
   if (msg.includes('폴리곤(Polygon)으로 확인하지 못했습니다')) {
