@@ -854,7 +854,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101113';
+const APP_VERSION = '2026101114';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1131,6 +1131,21 @@ async function pickLiveRpc() {
     } catch (_) {}
   }
   return CONFIG.RPC_URL; // 전부 실패하면 기본값 (기존과 동일)
+}
+
+// 예비 연결(왈렛커넥트)이 폰에 저장한 옛 세션 청소 — 폐기된 조회망이 박제된 경우 대비 (2026-10-12)
+function purgeWcStorage() {
+  let n = 0;
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.indexOf('wc@2') === 0 || k.indexOf('walletconnect') !== -1 || k.indexOf('WALLETCONNECT') !== -1)) {
+        localStorage.removeItem(k); n++;
+      }
+    }
+  } catch (_) {}
+  try { indexedDB.deleteDatabase('WALLET_CONNECT_V2_INDEXED_DB'); } catch (_) {}
+  return n;
 }
 
 async function connectViaWalletConnect(btn) {
@@ -3441,7 +3456,7 @@ function showError(msg) {
           p_ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?',
           p_wallet: walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : '미연결',
           p_msg: String(d2.raw || '') + (d2.code ? ' (code ' + d2.code + ')' : ''),
-          p_env: (typeof window.ethereum !== 'undefined' ? 'TW내장' : '일반브라우저') + (window.__usingWC ? '+예비연결' : ''),
+          p_env: (typeof window.ethereum !== 'undefined' ? 'TW내장' : '일반브라우저') + (window.__usingWC ? '+예비연결' : '') + (__liveRpc ? '|rpc:' + __liveRpc.split('/')[2] : '|rpc:미선택'),
           p_ua: navigator.userAgent.slice(0, 280),
         }),
       }).catch(() => {});
@@ -3617,6 +3632,19 @@ function parseError(err) {
   const code = err?.code || '';
   // 오류 정보 복사용 원본 기록 (개인정보 없음 — 오류 원문·코드만)
   window._lastErrDiag = { raw: String(msg).slice(0, 500), code, at: Date.now() };
+
+  // 자가 치유 (2026-10-12): 예비 연결이 폰에 저장해 둔 옛 연결(폐기된 조회망 포함)을 재사용하다
+  // "invalid project id"가 나면, 저장된 연결을 지우고 새로 연결하게 한다. 1회만 자동 실행.
+  if (String(msg).toLowerCase().includes('invalid project id') && !window.__wcPurged) {
+    window.__wcPurged = true;
+    try {
+      const n = purgeWcStorage();
+      try { if (wcProvider && wcProvider.disconnect) wcProvider.disconnect(); } catch (_) {}
+      wcProvider = null;
+      window._lastErrDiag.title = '연결 정보 초기화 완료';
+      return '앱 고장이 아닙니다. 예비 연결이 폰에 저장해 둔 <strong>옛 연결 정보</strong>가 낡아 생긴 오류입니다.<br><br>방금 자동으로 정리했습니다. <strong>[지갑 연결하기]를 다시 눌러</strong> 주세요.' + (n ? '<br><span style="font-size:12px;color:var(--text3)">(오래된 기록 ' + n + '건 정리됨)</span>' : '');
+    } catch (_) {}
+  }
 
   // 사용자가 직접 서명을 거부한 경우 (Trust Wallet, MetaMask 공통)
   if (
