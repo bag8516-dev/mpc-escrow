@@ -854,7 +854,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101112';
+const APP_VERSION = '2026101113';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3431,6 +3431,21 @@ function showError(msg) {
   document.getElementById('errDiagArea').style.display = fresh ? 'block' : 'none';
   if (fresh) {
     showErrReportBox(); // 신고 전문을 즉시 표시 — 복사 버튼이 안 눌리는 기기도 캡처/수동복사 가능
+    // 오류 자동 수집: 회원이 아무것도 안 눌러도 운영진이 바로 알 수 있게 (2026-10-12, 실패해도 무시)
+    try {
+      const d2 = window._lastErrDiag || {};
+      fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_err_add', {
+        method: 'POST',
+        headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          p_ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?',
+          p_wallet: walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : '미연결',
+          p_msg: String(d2.raw || '') + (d2.code ? ' (code ' + d2.code + ')' : ''),
+          p_env: (typeof window.ethereum !== 'undefined' ? 'TW내장' : '일반브라우저') + (window.__usingWC ? '+예비연결' : ''),
+          p_ua: navigator.userAgent.slice(0, 280),
+        }),
+      }).catch(() => {});
+    } catch (_) {}
   } else {
     const rt = document.getElementById('errReportText');
     if (rt) rt.style.display = 'none';
