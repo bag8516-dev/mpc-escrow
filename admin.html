@@ -221,7 +221,7 @@ input,select{outline:none;border:none;font-family:inherit;color:var(--text);back
 // ── 설정 ────────────────────────────────────────────────────────────────────
 // ── 가짜(복제) 사이트 자가 감지 (회원용 앱과 동일, 2026-10) ──
 (function () {
-  const OFFICIAL_HOST = 'bag8516-dev.github.io';
+  const OFFICIAL_HOST = 'mpcescrow.com';
   const h = location.hostname;
   if (h === OFFICIAL_HOST || h === 'localhost' || h === '127.0.0.1' || h === '') return;
   document.addEventListener('DOMContentLoaded', function () {
@@ -245,7 +245,7 @@ const ADMIN_CONFIG = {
     '0xF07ab48453B4f97cC15966a6F06F815399ea00c1',
   ],
   RPC_FALLBACKS: [
-    'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1', // 전용 노드 (2026-10, 1순위)
+    'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (2026-10-11 교체, 1순위)
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',
     'https://polygon.drpc.org',
