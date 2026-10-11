@@ -231,6 +231,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
       const marketData = {
         updated: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10),
         count30: in30.length, avg30: avg30 && Math.round(avg30),
+        regs: revealed, // 누적 거래 등록 — 홈 에스크로 수치가 자동 갱신되도록 (2026-10-11)
         recent: comp.slice(0, 10).map(c => ({ d: fmtD(c.ts), mpc: c.mpc, unitKrw: c.unitKrw })),
       };
       fs.writeFileSync('C:/Projects/mpc-landing/market.json', JSON.stringify(marketData));
