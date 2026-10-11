@@ -19,7 +19,7 @@ const issues = [];
   console.log = (...a) => { const s = a.join(' '); if (s.includes('⚠️')) issues.push(s.replace(/⚠️\s*/, '')); orig(...a); };
 }
 
-const RPC_MAIN = 'https://polygon-mainnet.infura.io/v3/10e1ce6e2b7d4ee086e80869c85f9da1'; // 전용 노드 (2026-10)
+const RPC_MAIN = 'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2'; // 전용 노드 (2026-10)
 const RPC_FALLBACK = 'https://rpc-mainnet.matic.quiknode.pro';
 const PROXY = '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972';
 const USDT = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
