@@ -737,11 +737,10 @@ const CONFIG = {
   // 2026-07 점검: polygon-rpc.com(401 차단), llamarpc(DNS 실패), ankr(무응답) 제거
   // 2026-10: Infura 전용 노드를 1순위로 — 공용 노드 상태에 따른 401/429/지연 오류 구조적 제거
   RPC_FALLBACKS: [
-    // 2026-10-12 임시 순서: 인퓨라 설정 전파가 지역별로 덜 끝나 간헐 오류 → 전파 완료 확인 후 인퓨라 1순위 복귀
+    'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (2026-10-13 1순위 복귀 — 죽거나 오류 응답이면 pickLiveRpc가 건너뜀)
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',   // 일반 조회 빠름
     'https://polygon.drpc.org',
-    'https://polygon-mainnet.infura.io/v3/c750d5ee07fc43eeaf0e9d64fff90ff2', // 전용 노드 (전파 끝나면 1순위 복귀)
   ],
   EXPLORER:      'https://polygonscan.com',
   NATIVE_TOKEN:  'POL',
@@ -854,7 +853,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101117';
+const APP_VERSION = '2026101118';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1763,6 +1762,8 @@ async function fetchLiveRate() {
   for (const fetcher of [fetchRateCoinGecko, fetchRateUpbit]) {
     try {
       liveKrwRate = await fetcher();
+      window.__rateAt = Date.now();
+      try { localStorage.setItem('last_rate', JSON.stringify({ r: liveKrwRate, t: window.__rateAt })); } catch (_) {}
       if (el) el.textContent = `${liveKrwRate.toLocaleString()}원`;
       if (upd) upd.innerHTML = '5분마다 업데이트';
       syncAutoRate(); // 판매 화면 환율 자동 반영 (조작 방지 — 직접 입력 불가)
@@ -1771,6 +1772,21 @@ async function fetchLiveRate() {
       return;
     } catch { /* 다음 소스 시도 */ }
   }
+  // 두 공급처가 모두 실패해도 30분 안의 마지막 정상값은 그대로 쓴다 (2026-10-13) — 그보다 오래되면 기존처럼 막는다
+  try {
+    let last = (liveKrwRate && window.__rateAt) ? { r: liveKrwRate, t: window.__rateAt } : null;
+    if (!last) last = JSON.parse(localStorage.getItem('last_rate') || 'null');
+    if (last && last.r > 0 && Date.now() - last.t < 30 * 60 * 1000) {
+      liveKrwRate = last.r;
+      const mins = Math.max(1, Math.round((Date.now() - last.t) / 60000));
+      if (el) el.textContent = `${liveKrwRate.toLocaleString()}원 (${mins}분 전 값)`;
+      if (upd) upd.innerHTML = '새 환율을 못 받아 직전 값 사용 중 · 곧 재시도';
+      syncAutoRate();
+      calcSell();
+      updateBuyLiveRate();
+      return;
+    }
+  } catch (_) {}
   if (el) el.textContent = '환율 정보를 불러올 수 없습니다';
   if (upd) upd.innerHTML = '업데이트 실패';
 }
@@ -2289,6 +2305,18 @@ async function buyDepositFlow() {
     if (!trade || Number(trade.status) === 0) {
       resetButton(btn, 'USDT 예치하고 구매하기');
       showError('거래 정보를 불러올 수 없습니다. 잠시 후 다시 시도하거나 판매자에게 문의하세요.');
+      return;
+    }
+
+    // 구매 가능한 상태는 2(PENDING)뿐 — 이미 끝난 거래는 서명 전에 막아 가스비·승인 낭비를 없앤다 (2026-10-13)
+    if (Number(trade.status) !== 2) {
+      resetButton(btn, 'USDT 예치하고 구매하기');
+      const st = Number(trade.status);
+      const why = st === 4 ? '이미 다른 분이 구매를 완료한 거래입니다.'
+                : st === 5 ? '판매자가 취소한 거래입니다.'
+                : st === 6 ? '판매 시간이 지나 만료된 거래입니다.'
+                : '지금은 구매할 수 없는 상태의 거래입니다.';
+      showError(`❌ ${why}<br><br>장터에서 다른 판매 글을 골라 주세요.<br><span style="font-size:12px;color:var(--text3)">서명 전에 미리 막았으니 수수료는 나가지 않았습니다.</span>`);
       return;
     }
 
