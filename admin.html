@@ -249,8 +249,6 @@ const ADMIN_CONFIG = {
     'https://rpc-mainnet.matic.quiknode.pro',   // 이벤트 대량 조회 가능
     'https://polygon-bor-rpc.publicnode.com',
     'https://polygon.drpc.org',
-    'https://1rpc.io/matic',
-    'https://polygon-pokt.nodies.app',
   ],
 };
 
@@ -439,6 +437,24 @@ function loadAdminWcLib() {
     document.head.appendChild(s);
   });
 }
+// 살아 있는 조회망 고르기 — 지갑 연결이 한 곳에 안 기대게 (2026-10-13)
+async function pickLiveAdminRpc() {
+  for (const url of ADMIN_CONFIG.RPC_FALLBACKS) {
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch(url, {
+        method: 'POST', signal: ctl.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }),
+      });
+      clearTimeout(timer);
+      const j = await r.json();
+      if (j && j.result) return url;
+    } catch (_) {}
+  }
+  return ADMIN_CONFIG.RPC_FALLBACKS[0];
+}
 async function connectAdminViaWC() {
   try {
     setBtn('btnConnect', '예비 연결 준비 중...', true);
@@ -448,7 +464,7 @@ async function connectAdminViaWC() {
       adminWcProvider = await WCEP.init({
         projectId: ADMIN_CONFIG.WC_PROJECT_ID,
         chains: [ADMIN_CONFIG.CHAIN_ID],
-        rpcMap: { [ADMIN_CONFIG.CHAIN_ID]: ADMIN_CONFIG.RPC_FALLBACKS[0] },
+        rpcMap: { [ADMIN_CONFIG.CHAIN_ID]: await pickLiveAdminRpc() },
         showQrModal: false,
         metadata: { name: 'MPC 에스크로 관리자', description: '관리자 페이지', url: location.origin, icons: [location.origin + '/mpc-escrow/icon-192.png'] },
       });
