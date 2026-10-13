@@ -71,7 +71,7 @@ async function getLogsRange(p, from, to, depth = 0) {
   }
 }
 
-(async () => {
+async function main() {
   const p = await getProvider();
   const latest = await p.getBlockNumber();
   const SAFE = latest - 30; // 체인 재구성 여유
@@ -149,4 +149,17 @@ async function getLogsRange(p, from, to, depth = 0) {
       console.log('stats.json 게시 완료');
     } else console.log('stats.json 변화 없음');
   } catch (e) { console.log('⚠️ stats.json 게시 실패:', e.message); }
-})().catch(e => { console.log('⚠️ 체인 현황 집계 실패:', e.message); process.exit(1); });
+}
+
+// 일시적 네트워크 장애 대비: 재시도는 스크립트 안에서 한다 (예약 작업이 새 명령을 만들면 허용 창이 떠서 멈춘다)
+(async () => {
+  for (let a = 1; a <= 3; a++) {
+    try { await main(); return; }
+    catch (e) {
+      console.log(`⚠️ 체인 현황 집계 ${a}/3회 실패:`, e.message);
+      if (a < 3) await new Promise(r => setTimeout(r, 2 * 60 * 1000)); // 도구 1회 실행 한도(10분) 안에 끝나도록 2분 간격
+    }
+  }
+  console.log('⚠️ 체인 현황 집계 실패: 3회 모두 실패');
+  process.exit(1);
+})();

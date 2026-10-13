@@ -20,7 +20,7 @@ const KNOWN = [
   { sig: /could not detect network/i, name: '조회망 연결 실패', rx: '재시도 안내, 반복되면 조회망 점검' },
 ];
 
-(async () => {
+async function main() {
   let st = { lastId: 0, seen: {} };
   if (fs.existsSync(STATE)) st = JSON.parse(fs.readFileSync(STATE, 'utf8'));
 
@@ -76,4 +76,17 @@ const KNOWN = [
   }
   fs.writeFileSync(STATE, JSON.stringify(st));
   console.log(`처리 완료: ${rows.length}건 (새 패턴 알림 대상 ${news.length}건)`);
-})().catch(e => { console.log('⚠️ 오류 분류 실패:', e.message); process.exit(1); });
+}
+
+// 재시도는 스크립트 안에서 (새 명령을 만들면 허용 창이 떠서 무인 실행이 멈춘다)
+(async () => {
+  for (let a = 1; a <= 2; a++) {
+    try { await main(); return; }
+    catch (e) {
+      console.log(`⚠️ 오류 분류 ${a}/2회 실패:`, e.message);
+      if (a < 2) await new Promise(r => setTimeout(r, 2 * 60 * 1000));
+    }
+  }
+  console.log('⚠️ 오류 분류 실패: 2회 모두 실패');
+  process.exit(1);
+})();
