@@ -1,4 +1,4 @@
-# 에스크로 앱 배포 (main 커밋 → gh-pages 복사·커밋·푸시 → 라이브 반영 확인)
+﻿# 에스크로 앱 배포 (main 커밋 → gh-pages 복사·커밋·푸시 → 라이브 반영 확인)
 # 사용: powershell -File scripts\deploy-app.ps1 -Message "v21: 설명"
 # 세 곳(앱 본문 APP_VERSION / frontend\version.json / 배포 루트 version.json)의 버전이 다르면 배포하지 않고 멈춘다.
 param([Parameter(Mandatory = $true)][string]$Message)
