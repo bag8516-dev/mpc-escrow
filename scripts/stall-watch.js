@@ -55,9 +55,41 @@ for (const j of JOBS) {
   }
 }
 
-fs.writeFileSync(STATE, JSON.stringify(st));
-if (late.length) {
+// 서버 5분 자동 호출: 함수 직접 호출로 응답 확인 + (SQL 6번 적용 시) 마지막 자동 호출 경과 초 확인
+const SB = 'https://idqnxrwrnisxjbovvpli.supabase.co';
+const PUB = 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh';
+async function serverCheck() {
+  const callKey = fs.readFileSync('C:/ssabom/appdata/mpc-esc-call-key.txt', 'utf8').split('\n')[2].match(/[0-9a-f]{32}/)[0];
+  const problems = [];
   try {
-    execFileSync(process.execPath, [path.join(__dirname, 'notify-op.js'), '자동 작업이 멈춘 것 같아요', late.join(' / ')], { stdio: 'inherit' });
-  } catch (e) { console.log('알림 발송 실패:', e.message); process.exit(1); }
+    const r = await fetch(SB + '/functions/v1/esc-push-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ call: callKey }), signal: AbortSignal.timeout(60000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error || (j.errors && j.errors.length)) problems.push('서버 함수 응답 이상 (' + (j.error || r.status) + ')');
+    else console.log('정상: 서버 함수 응답');
+  } catch (e) { problems.push('서버 함수 호출 실패'); }
+  try {
+    const r = await fetch(SB + '/rest/v1/rpc/esc_cron_age', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: PUB, Authorization: 'Bearer ' + PUB }, body: '{}', signal: AbortSignal.timeout(20000) });
+    if (r.status === 404) console.log('서버 5분 호출 시각 조회: SQL 6번 미적용 (건너뜀)');
+    else if (r.ok) {
+      const age = await r.json();
+      if (age === null) console.log('서버 5분 호출: 아직 기록 없음');
+      else if (age > 900) problems.push('서버 5분 자동 호출이 ' + Math.round(age / 60) + '분째 안 불림');
+      else console.log('정상: 서버 5분 호출 ' + age + '초 전');
+    } else problems.push('서버 호출 시각 조회 실패 (' + r.status + ')');
+  } catch (e) { problems.push('서버 호출 시각 조회 실패'); }
+  return problems.join(' / ');
 }
+
+(async () => {
+  const sp = await serverCheck();
+  if (sp) {
+    if (!st.server || now - st.server > REALERT) { late.push(sp); st.server = now; }
+    console.log('지연: server ' + sp);
+  } else delete st.server;
+  fs.writeFileSync(STATE, JSON.stringify(st));
+  if (late.length) {
+    try {
+      execFileSync(process.execPath, [path.join(__dirname, 'notify-op.js'), '자동 작업이 멈춘 것 같아요', late.join(' / ')], { stdio: 'inherit' });
+    } catch (e) { console.log('알림 발송 실패:', e.message); process.exit(1); }
+  }
+})();
