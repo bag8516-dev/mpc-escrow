@@ -10,6 +10,7 @@ const STATE = 'C:/ssabom/appdata/stall-watch-state.json';
 const REALERT = 6 * H;
 
 const kstToMs = s => Date.parse(s.replace(' ', 'T') + ':00+09:00');
+const WORK = 'C:/Users/박세진/OneDrive/Desktop/업무관련';
 const mtime = f => fs.statSync(f).mtimeMs;
 
 const JOBS = [
@@ -19,6 +20,18 @@ const JOBS = [
     last: () => kstToMs(JSON.parse(fs.readFileSync('C:/Projects/mpc-landing/stats.json', 'utf8')).updated) },
   { key: 'daily-audit', name: '일일 장부 점검', maxAge: 27 * H,
     last: () => mtime('C:/ssabom/appdata/audit-history.jsonl') },
+  { key: 'weekly-review', name: '주간 자가 점검', maxAge: 8.5 * 24 * H,
+    last: () => Math.max(...fs.readdirSync(WORK + '/주간점검').map(f => mtime(WORK + '/주간점검/' + f))) },
+  // 매월 1일 09:40에 전월 PDF가 생긴다. 2~8일에만 확인하고 그 밖의 날은 건너뛴다
+  { key: 'monthly-report', name: '월간 운영 리포트', maxAge: 0,
+    last: () => {
+      const k = new Date(Date.now() + 9 * H), d = k.getUTCDate();
+      if (d < 2 || d > 8) return null;
+      const p = new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth() - 1, 1));
+      const f = WORK + '/운영리포트/' + p.getUTCFullYear() + '-' + String(p.getUTCMonth() + 1).padStart(2, '0') + '.pdf';
+      if (!fs.existsSync(f)) throw new Error('전월 PDF 없음');
+      return Date.now();
+    } },
 ];
 
 // 방금 켜졌거나 절전에서 깬 직후에는 예약 작업이 따라잡을 시간을 준다
@@ -31,14 +44,14 @@ const late = [];
 
 for (const j of JOBS) {
   let age;
-  try { age = now - j.last(); } catch (e) { age = Infinity; }
-  const ageH = age === Infinity ? '확인 불가' : (age / H).toFixed(1) + '시간';
+  try { const t = j.last(); if (t === null) { delete st[j.key]; continue; } age = now - t; } catch (e) { age = Infinity; }
+  const ageH = age === Infinity ? '결과물 없음' : (age / H).toFixed(1) + '시간 전';
   if (age > j.maxAge) {
-    if (!st[j.key] || now - st[j.key] > REALERT) { late.push(`${j.name} ${ageH} 전`); st[j.key] = now; }
+    if (!st[j.key] || now - st[j.key] > REALERT) { late.push(`${j.name} ${ageH}`); st[j.key] = now; }
     console.log(`지연: ${j.key} ${ageH}`);
   } else {
     delete st[j.key];
-    console.log(`정상: ${j.key} ${ageH} 전`);
+    console.log(`정상: ${j.key} ${ageH}`);
   }
 }
 
