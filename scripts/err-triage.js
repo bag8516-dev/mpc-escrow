@@ -12,6 +12,7 @@ const OPERATOR = '0xf07ab48453b4f97cc15966a6f06f815399ea00c1';
 const KNOWN = [
   { sig: /invalid project id/i, name: '조회망 설정 전파 지연', rx: '앱 껐다 켜기 안내 (v12부터 공용망 우선이라 신규 발생 없어야 함 — v12 이상에서 또 나오면 새 패턴 취급)' },
   { sig: /user (rejected|denied|disapproved|cancel+ed)|거절/i, name: '서명·연결 거절', rx: '회원이 지갑에서 취소한 것 — 조치 불필요' },
+  { sig: /not a participant/i, name: '판매자 아닌 지갑으로 취소 시도', rx: '앱이 "판매자 지갑이 아닙니다"라고 안내함 — 지갑 전환 안내만' },
   { sig: /proposal expired|session.?expired/i, name: '연결 제안 시간 초과', rx: '지갑 승인 늦음 — 다시 연결하면 됨, 조치 불필요' },
   { sig: /insufficient funds|잔액|gas required/i, name: '가스비(POL) 부족', rx: 'POL 충전 안내' },
   { sig: /HTTP 401|unauthorized/i, name: '지갑 노드 일시 오류', rx: '예비 연결 안내 (기존 확립 해법)' },

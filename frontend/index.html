@@ -796,7 +796,10 @@ let _readProviderIdx = 0;
 async function getReadProvider() {
   // 이미 동작 중인 provider가 있으면 재사용
   if (_readProvider) return _readProvider;
-  for (let i = _readProviderIdx; i < CONFIG.RPC_FALLBACKS.length; i++) {
+  const n = CONFIG.RPC_FALLBACKS.length;
+  // 현재 위치부터 한 바퀴 돌며 시도 (2026-10-13: 앞 칸이 막혀도 뒤쪽에서 못 찾고 포기하던 문제 수정)
+  for (let k = 0; k < n; k++) {
+    const i = (_readProviderIdx + k) % n;
     try {
       const p = new ethers.providers.JsonRpcProvider(CONFIG.RPC_FALLBACKS[i]);
       await p.getBlockNumber(); // 연결 확인
@@ -811,6 +814,8 @@ async function getReadProvider() {
 
 function resetReadProvider() {
   _readProvider = null; // 다음 호출 시 재연결 시도
+  // 방금 실패한 곳을 건너뛰고 다음 조회망부터 시작 — 블록번호만 응답하고 실제 조회는 실패하는 서버에 계속 붙는 것을 막는다 (2026-10-13)
+  _readProviderIdx = (_readProviderIdx + 1) % CONFIG.RPC_FALLBACKS.length;
 }
 
 // ── 전역 에러 캐치 ────────────────────────────────────────────────────────
@@ -853,7 +858,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101118';
+const APP_VERSION = '2026101119';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3413,11 +3418,11 @@ async function getRemainingTime(tradeId) {
 // 공용 RPC 조회 공통 루틴 — 실패하면 다른 공용 RPC로 교체해 1회 더 시도
 // (지갑 노드 폴백보다 먼저 — 지갑 노드 401이 사용자에게 노출되는 것 방지)
 async function readCall(fn) {
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < Math.min(3, CONFIG.RPC_FALLBACKS.length); i++) {
     try {
       const readP = await getReadProvider();
       if (readP) return await fn(readP);
-    } catch { resetReadProvider(); }
+    } catch { resetReadProvider(); } // 실패한 조회망은 건너뛰고 다음 곳으로
   }
   return null;
 }
