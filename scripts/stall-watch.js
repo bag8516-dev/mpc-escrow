@@ -15,7 +15,7 @@ const mtime = f => fs.statSync(f).mtimeMs;
 
 const JOBS = [
   { key: 'err-triage', name: '오류 신고 자동 분류', maxAge: 2.5 * H,
-    last: () => mtime('C:/ssabom/appdata/mpc-err-state.json') },
+    last: () => mtime('C:/ssabom/appdata/mpc-err-heartbeat.txt') },
   { key: 'chain-stats', name: '온체인 현황 집계', maxAge: 14 * H,
     last: () => kstToMs(JSON.parse(fs.readFileSync('C:/Projects/mpc-landing/stats.json', 'utf8')).updated) },
   { key: 'daily-audit', name: '일일 장부 점검', maxAge: 27 * H,

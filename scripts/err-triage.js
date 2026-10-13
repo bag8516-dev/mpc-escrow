@@ -6,6 +6,7 @@ const ADMIN_KEY = fs.readFileSync('C:/ssabom/appdata/mpc-esc-admin-secret.txt', 
 const PUB = 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh';
 const BASE = 'https://idqnxrwrnisxjbovvpli.supabase.co';
 const STATE = 'C:/ssabom/appdata/mpc-err-state.json';
+const HEARTBEAT = 'C:/ssabom/appdata/mpc-err-heartbeat.txt';
 const OPERATOR = '0xf07ab48453b4f97cc15966a6f06f815399ea00c1';
 
 // 아는 패턴(처방 있음) — 새로 분류되면 여기 추가해 나간다
@@ -31,6 +32,7 @@ async function main() {
   });
   if (!r.ok) throw new Error('목록 조회 실패 HTTP ' + r.status);
   const rows = await r.json();
+  fs.writeFileSync(HEARTBEAT, String(Date.now())); // 새 신고가 없어도 정상 실행 흔적을 남긴다 (멈춤 감시용)
   if (!rows.length) { console.log('새 신고 없음 (마지막 id ' + st.lastId + ')'); return; }
 
   const news = [];
