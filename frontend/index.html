@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A0F1E">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -450,6 +450,7 @@ function installApp() {
     </div>
 
     <div style="padding:16px 16px 0" id="buyActionArea">
+      <div class="info-box" id="buyReady" style="margin-bottom:10px;display:none"></div>
       <div class="info-box" style="margin-bottom:10px">
         ℹ️ <strong>거래 전 꼭 읽어주세요</strong><br><br>
         1️⃣ 지갑 연결 시 <strong>"확인되지 않은 연결"</strong> 경고가 표시될 수 있습니다. 이는 Trust Wallet의 일반적인 보안 안내이며 정상입니다. <strong>"연결"</strong>을 눌러 진행해주세요.<br><br>
@@ -858,7 +859,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101120';
+const APP_VERSION = '2026101401';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2215,6 +2216,7 @@ async function showBuyerPage(tradeId) {
   document.getElementById('buyWaitArea').style.display = 'none';
   document.getElementById('buyCompleteArea').style.display = 'none';
   document.getElementById('buyCancelledArea').style.display = 'none';
+  document.getElementById('buyReady').style.display = 'none';
 
   try {
     const trade = await fetchTrade(tradeId);
@@ -2282,6 +2284,7 @@ async function showBuyerPage(tradeId) {
     document.getElementById('buyTotalKrw').textContent   = `${totalKrw.toLocaleString()}원`;
     document.getElementById('buySellerRate').textContent = `${krw.toLocaleString()}원`;
     updateBuyLiveRate();
+    renderBuyReadiness(usdt);
 
     // 타이머 시작
     startTimer(remaining);
@@ -2289,6 +2292,36 @@ async function showBuyerPage(tradeId) {
   } catch (err) {
     showError(parseError(err));
   }
+}
+
+// 구매 준비 상태: 수수료 POL·USDT 잔액을 서명 전에 보여 준다. 조회 실패는 "확인 못 함"으로 두고 구매를 막지 않는다.
+async function renderBuyReadiness(usdtNeeded) {
+  const box = document.getElementById('buyReady');
+  if (!walletAddress) return;
+  box.style.display = '';
+  box.textContent = '⏳ 지갑 잔액을 확인하는 중...';
+  try {
+    const [pol, usdtBal] = await Promise.all([
+      readCall(p => p.getBalance(walletAddress)),
+      readTokenBalance(CONFIG.USDT_TOKEN, walletAddress).catch(() => null),
+    ]);
+    const lines = [];
+    if (pol === null) lines.push('⚪ 수수료용 POL: 확인 못 함');
+    else {
+      const v = Number(ethers.utils.formatEther(pol));
+      lines.push(v >= CONFIG.MIN_POL_GAS
+        ? `✅ 수수료용 POL ${v.toFixed(3)}개 — 충분합니다`
+        : `⚠️ 수수료용 POL ${v.toFixed(3)}개 — 부족합니다. 거래 전에 POL을 ${CONFIG.MIN_POL_GAS}개 이상 넣어 두세요. (MPC·USDT와 별개의 수수료 코인)`);
+    }
+    if (usdtBal === null) lines.push('⚪ USDT: 확인 못 함');
+    else {
+      const u = Number(ethers.utils.formatUnits(usdtBal, 6));
+      lines.push(u >= usdtNeeded
+        ? `✅ USDT ${u.toFixed(1)} — 필요한 ${usdtNeeded.toFixed(1)} USDT가 있습니다`
+        : `⚠️ USDT ${u.toFixed(1)} — ${(usdtNeeded - u).toFixed(1)} USDT가 모자랍니다. 폴리곤 체인의 USDT만 쓸 수 있습니다.`);
+    }
+    box.innerHTML = '<strong>구매 전 준비 상태</strong><br>' + lines.join('<br>');
+  } catch { box.style.display = 'none'; }
 }
 
 function showExpiredPage() {
