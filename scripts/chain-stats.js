@@ -18,15 +18,17 @@ const ZERO = '0x0000000000000000000000000000000000000000';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const RPC_EXTRA = ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'];
-async function getProvider() {
-  // 1순위 전용 노드 → 안 되면 공용망 순서대로 (실제 호출로 생사 확인)
-  for (const url of [RPC_MAIN, RPC_FALLBACK, ...RPC_EXTRA]) {
+async function getProvider(skip = 0) {
+  // 1순위 전용 노드 → 안 되면 공용망 순서대로 (실제 호출로 생사 확인). 재시도마다 시작 노드를 한 칸씩 바꾼다
+  // 로그 조회(getLogs)는 Infura 가 간헐적으로 실패해서 공용 노드를 먼저 쓴다 (2026-10-14 장애)
+  const all = [RPC_EXTRA[0], RPC_FALLBACK, RPC_MAIN, RPC_EXTRA[1]];
+  for (const url of all.slice(skip % all.length).concat(all.slice(0, skip % all.length))) {
     try {
       const req = new ethers.FetchRequest(url);
       req.setHeader('Origin', 'https://mpcescrow.com');
       const p = new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
       await p.getBlockNumber();
-      if (url !== RPC_MAIN) console.log('조회망 전환:', url.split('/')[2]);
+      console.log('조회망:', url.split('/')[2]);
       return p;
     } catch (_) {}
   }
@@ -71,8 +73,8 @@ async function getLogsRange(p, from, to, depth = 0) {
   }
 }
 
-async function main() {
-  const p = await getProvider();
+async function main(attempt = 0) {
+  const p = await getProvider(attempt);
   const latest = await p.getBlockNumber();
   const SAFE = latest - 30; // 체인 재구성 여유
 
@@ -154,7 +156,7 @@ async function main() {
 // 일시적 네트워크 장애 대비: 재시도는 스크립트 안에서 한다 (예약 작업이 새 명령을 만들면 허용 창이 떠서 멈춘다)
 (async () => {
   for (let a = 1; a <= 3; a++) {
-    try { await main(); return; }
+    try { await main(a - 1); return; }
     catch (e) {
       console.log(`⚠️ 체인 현황 집계 ${a}/3회 실패:`, e.message);
       if (a < 3) await new Promise(r => setTimeout(r, 2 * 60 * 1000)); // 도구 1회 실행 한도(10분) 안에 끝나도록 2분 간격
