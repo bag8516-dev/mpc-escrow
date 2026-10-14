@@ -389,7 +389,7 @@ function installApp() {
           <input type="number" id="sellPricePerMpc" placeholder="0" step="50" min="500" oninput="calcSell()">
           <span class="input-unit">원</span>
         </div>
-        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">최소 500원, 50원 단위 (예: 500, 550, 600...)</div>
+        <div id="hintPrice" style="font-size:11px;color:var(--text3);margin-top:4px">최소 50원, 50원 단위 (예: 50, 100, 150...)</div>
       </div>
 
       <div class="input-group">
@@ -757,7 +757,7 @@ const CONFIG = {
   MIN_POL_GAS:   0.01,   // 최소 POL 잔액 (가스비)
   MIN_MPC:       100,
   MAX_MPC:       100000,
-  MIN_PRICE:     500,    // MPC 1개당 최소 원화 가격 (2026-07-14 정책: 500원)
+  MIN_PRICE:     50,     // MPC 1개당 최소 원화 가격 (2026-10-15 사용자 결정: 500원 → 50원)
   RATE_TOLERANCE: 0.10,  // 환율 입력 허용 오차 (실시간 환율 대비 ±10%) — 가짜 환율로 최소가 우회 방지
   TRADE_TIMEOUT: 86400,  // 24시간 (초) — 컨트랙트 TRADE_TIMEOUT과 반드시 일치해야 함
   RATE_INTERVAL: 300000, // 5분 (ms)
@@ -859,7 +859,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101501';
+const APP_VERSION = '2026101502';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -1634,7 +1634,7 @@ function openWishForm() {
     + '<label style="font-size:12px;color:var(--text2)">희망 수량 (MPC)</label>'
     + '<input id="wishMpc" type="number" inputmode="numeric" min="100" placeholder="예: 10000" style="width:100%;margin:4px 0 10px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
     + '<label style="font-size:12px;color:var(--text2)">개당 희망가 (원)</label>'
-    + '<input id="wishPrice" type="number" inputmode="decimal" min="100" step="1" placeholder="예: 500 (최소 100원)" style="width:100%;margin:4px 0 14px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
+    + '<input id="wishPrice" type="number" inputmode="decimal" min="50" step="1" placeholder="예: 500 (최소 50원)" style="width:100%;margin:4px 0 14px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">'
     + '<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveWish()">등록</button>'
     + '<button class="btn btn-outline" style="width:100%" onclick="document.getElementById(\'wishFormOv\').remove()">취소</button></div>';
   document.body.appendChild(ov);
@@ -1645,7 +1645,7 @@ async function saveWish() {
     const mpc = Number(document.getElementById('wishMpc').value);
     const price = Number(document.getElementById('wishPrice').value);
     if (!mpc || mpc < 100) { showToast('수량은 100 MPC 이상으로 입력해주세요'); return; }
-    if (!price || price < 100) { showToast('개당 희망가는 100원 이상으로 입력해주세요'); return; }
+    if (!price || price < 50) { showToast('개당 희망가는 50원 이상으로 입력해주세요'); return; }
     const tokKey = 'wishTok_' + walletAddress.toLowerCase();
     const r = await fetch(PUSH_CFG.URL + '/rest/v1/rpc/esc_wish_set', {
       method: 'POST',
@@ -1855,7 +1855,7 @@ function calcSell() {
     el.style.color = warn ? 'var(--danger)' : 'var(--text3)';
   };
   setHint('hintMpcAmt', '최소 100 ~ 최대 100,000 MPC', false);
-  setHint('hintPrice', '최소 500원, 50원 단위 (예: 500, 550, 600...)', false);
+  setHint('hintPrice', '최소 50원, 50원 단위 (예: 50, 100, 150...)', false);
   setHint('hintKrw', '10원 단위, 실시간 환율 ±10% 이내', false);
 
   if (mpcAmt <= 0 || pricePerMpc <= 0 || krwPerUsdt <= 0) {
@@ -2796,7 +2796,7 @@ function marketItemsFromCache(cache) {
   const nowSec = Math.floor(Date.now() / 1000);
   return Object.values(cache.items)
     .filter(it => it.createdAt + CONFIG.TRADE_TIMEOUT > nowSec)
-    // 최소가 정책(500원) 미만 글은 장터에 표시하지 않음
+    // 최소가 정책(CONFIG.MIN_PRICE) 미만 글은 장터에 표시하지 않음
     // 실질 단가 = USDT 단가 × 실시간 환율 (판매자가 입력한 환율 조작과 무관하게 판정)
     .filter(it => {
       const rate = liveKrwRate || it.krw;
