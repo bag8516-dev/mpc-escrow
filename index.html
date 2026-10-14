@@ -859,7 +859,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026101401';
+const APP_VERSION = '2026101501';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -990,6 +990,7 @@ async function twNodeHealthCheck() {
 // ── 초기화 ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   checkAppVersion(); // 접속 즉시 구버전 여부 확인
+  funnel('open');
   loadBuyWishes();   // 매수 희망 목록 (장터 배지·판매 힌트용)
   loadAuditBadge();  // 장부 검증 신뢰 배지
   // loadMarketStats(); // 커뮤니티 시세판 — 2026-10-11 사용자 요청으로 당분간 숨김 (주석 해제로 복구)
@@ -1083,6 +1084,7 @@ function openOutsideKakao() {
 }
 
 async function connectWallet() {
+  funnel('connect-click');
   const btn = document.getElementById('btnConnect');
   // 카톡 안에서는 지갑 연결이 안 되므로, 연결 시도 전에 외부 브라우저로 내보낸다
   if (isKakaoInApp()) {
@@ -1678,6 +1680,7 @@ async function deleteWish() {
 }
 
 function onWalletConnected() {
+  funnel('connected');
   // 헤더 표시
   document.getElementById('mainHeader').style.display = 'flex';
   document.getElementById('tabBar').style.display = 'flex';
@@ -1735,7 +1738,25 @@ function requireWallet() {
 }
 
 // ── 탭 전환 ───────────────────────────────────────────────────────────────
+// ── 이용 단계 집계 ───────────────────────────────────────────────────────
+// 어느 단계에서 사람이 빠지는지 보기 위한 횟수 집계. 지갑 주소·기기 정보는 보내지 않고
+// 단계 이름만 하루 단위로 센다(홈페이지 방문 집계와 같은 표). 같은 세션에서 같은 단계는 1회만.
+function funnel(step) {
+  try {
+    const k = 'fn_' + step;
+    if (sessionStorage.getItem(k)) return;
+    sessionStorage.setItem(k, '1');
+    fetch(PUSH_CFG.URL + '/rest/v1/rpc/site_hit', {
+      method: 'POST', keepalive: true,
+      headers: { apikey: PUSH_CFG.KEY, Authorization: 'Bearer ' + PUSH_CFG.KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p: 'esc:' + step }),
+    }).catch(() => {});
+  } catch {}
+}
+
 function showTab(tab) {
+  if (tab === 'market') funnel('market');
+  if (tab === 'sell') funnel('sell-tab');
   ['sell','market','status','history'].forEach(t => {
     document.getElementById('page' + capitalize(t)).classList.remove('active');
     document.getElementById('tab-' + t).classList.remove('active');
@@ -2173,6 +2194,7 @@ async function _createTradeFlowInner() {
       // 조회 실패는 RPC 서버 동기화 지연(통상 수 초)일 뿐
       console.warn('RPC 동기화 지연 - tradeId:', tradeId);
       showToast('✅ 거래 생성 완료! 아래 링크를 구매자에게 전달하세요.');
+      funnel('sell-ok');
     }
 
     // 8. 로컬 저장
@@ -2331,6 +2353,7 @@ function showExpiredPage() {
 
 // ── 구매자 예치 플로우 ────────────────────────────────────────────────────
 async function buyDepositFlow() {
+  funnel('deposit-click');
   if (!requireWallet()) return;
   if (!currentTradeId) { showError('거래 링크가 올바르지 않습니다. 판매자에게 받은 링크로 다시 접속해주세요.'); return; }
 
@@ -2429,6 +2452,7 @@ async function buyDepositFlow() {
     );
 
     await callBuyerDeposit(currentTradeId);
+    funnel('deposit-ok');
 
     // 즉시 완료 화면으로 전환
     document.getElementById('buyActionArea').style.display = 'none';
@@ -3008,6 +3032,7 @@ function startMarketCountdown() {
 }
 
 function buyFromMarket(tradeId) {
+  funnel('buy-click');
   currentTradeId = tradeId;
   showBuyerPage(tradeId);
 }
