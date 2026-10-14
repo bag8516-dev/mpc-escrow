@@ -3,7 +3,7 @@
 # 세 곳(앱 본문 APP_VERSION / frontend\version.json / 배포 루트 version.json)의 버전이 다르면 배포하지 않고 멈춘다.
 param([Parameter(Mandatory = $true)][string]$Message)
 Set-Location C:\Projects\mpc-escrow
-$attr = 'Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
+$attr = 'Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>'
 
 function G { & git @args; if ($LASTEXITCODE -ne 0) { throw "git 실패: git $($args -join ' ')" } }
 function Ver($file, $rx) { [regex]::Match((Get-Content $file -Raw -Encoding UTF8), $rx).Groups[1].Value }
