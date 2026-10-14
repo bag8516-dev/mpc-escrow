@@ -1,4 +1,6 @@
 require("@nomicfoundation/hardhat-toolbox");
+// 키는 금고 파일에서 먼저 읽고(C:\ssabom\appdata, 저장소 밖), 없으면 저장소 .env (값은 비워 둠)
+require("dotenv").config({ path: "C:/ssabom/appdata/mpc-escrow.env" });
 require("dotenv").config();
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
