@@ -38,18 +38,27 @@ const num = v => Number(ethers.formatUnits(v, 18));
 (async () => {
   let fail = false;
   // ── 전용 노드 상태 확인 (Origin 헤더: 대시보드 허용목록 설정 후에도 작동하도록) ──
-  let p;
-  try {
-    const req = new ethers.FetchRequest(RPC_MAIN);
-    req.setHeader('Origin', 'https://mpcescrow.com');
-    p = new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
-    const t0 = Date.now();
-    await p.getBlockNumber();
-    // 블록 번호만 주고 컨트랙트 읽기는 실패하는 장애가 있었다 (2026-10-16~17, Internal error -32603). 실제 읽기까지 확인해야 '정상'이라 말할 수 있다.
-    if ((await p.getCode(PROXY)).length <= 2) throw new Error('프록시 코드를 읽지 못함');
-    console.log(`전용 노드(Infura): 정상 (${Date.now() - t0}ms)`);
-  } catch (e) {
-    console.log(`⚠️ 전용 노드(Infura) 읽기 실패 (${String(e.shortMessage || e.message).slice(0, 60)}) — 공용 노드로 대체해 점검 계속. 앱도 자동 폴백되지만 원인 확인 필요`);
+  let p, probeErr, probeTries = 0;
+  // 한 번 흔들린 걸로 이상 표시하지 않는다 (Infura 가 들쭉날쭉하게 응답하는 날이 있다). 3번까지 시도하고 전부 실패해야 이상으로 알린다.
+  for (let i = 0; i < 3 && !p; i++) {
+    probeTries++;
+    try {
+      const req = new ethers.FetchRequest(RPC_MAIN);
+      req.setHeader('Origin', 'https://mpcescrow.com');
+      const q = new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
+      const t0 = Date.now();
+      await q.getBlockNumber();
+      // 블록 번호만 주고 컨트랙트 읽기는 실패하는 장애가 있었다 (2026-10-16~17, Internal error -32603). 실제 읽기까지 확인해야 '정상'이라 말할 수 있다.
+      if ((await q.getCode(PROXY)).length <= 2) throw new Error('프록시 코드를 읽지 못함');
+      p = q;
+      console.log(`전용 노드(Infura): 정상 (${Date.now() - t0}ms)${probeTries > 1 ? ` — ${probeTries}번째 시도에서 성공` : ''}`);
+    } catch (e) {
+      probeErr = e;
+      await sleep(2500);
+    }
+  }
+  if (!p) {
+    console.log(`⚠️ 전용 노드(Infura) 읽기 ${probeTries}번 모두 실패 (${String(probeErr.shortMessage || probeErr.message).slice(0, 60)}) — 공용 노드로 대체해 점검 계속. 앱도 자동 폴백되지만 원인 확인 필요`);
     fail = true;
     p = new ethers.JsonRpcProvider(RPC_FALLBACK);
   }
