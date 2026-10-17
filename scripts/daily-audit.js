@@ -45,12 +45,21 @@ const num = v => Number(ethers.formatUnits(v, 18));
     p = new ethers.JsonRpcProvider(req, 137, { staticNetwork: true });
     const t0 = Date.now();
     await p.getBlockNumber();
+    // 블록 번호만 주고 컨트랙트 읽기는 실패하는 장애가 있었다 (2026-10-16~17, Internal error -32603). 실제 읽기까지 확인해야 '정상'이라 말할 수 있다.
+    if ((await p.getCode(PROXY)).length <= 2) throw new Error('프록시 코드를 읽지 못함');
     console.log(`전용 노드(Infura): 정상 (${Date.now() - t0}ms)`);
   } catch (e) {
-    console.log('⚠️ 전용 노드(Infura) 응답 없음 — 공용 노드로 대체해 점검 계속. 앱도 자동 폴백되지만 원인 확인 필요');
+    console.log(`⚠️ 전용 노드(Infura) 읽기 실패 (${String(e.shortMessage || e.message).slice(0, 60)}) — 공용 노드로 대체해 점검 계속. 앱도 자동 폴백되지만 원인 확인 필요`);
     fail = true;
     p = new ethers.JsonRpcProvider(RPC_FALLBACK);
   }
+  // 전용 노드가 호출마다 들쭉날쭉하게 빈 응답(missing revert data)을 주는 장애가 있었다 (2026-10-16~17). 읽기는 재시도하고, 계속 실패하면 공용 노드로 읽는다.
+  const pf = new ethers.JsonRpcProvider(RPC_FALLBACK);
+  let retried = 0;
+  const withFallback = async (fn) => {
+    for (let i = 0; i < 2; i++) { try { return await fn(p); } catch { retried++; await sleep(1500); } }
+    return fn(pf);   // 공용 노드도 실패하면 예외가 그대로 올라가 '측정 실패'로 보고된다
+  };
   const idx = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const MPC = idx.match(/MPC_TOKEN:\s*'(0x[0-9a-fA-F]{40})'/)[1];
 
@@ -158,7 +167,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
     // 잔액을 N 시점으로 환산: 현재 잔액 − (N 이후 들어온 순입금)
     const M = await p.getBlockNumber();
     const erc = ['function balanceOf(address) view returns (uint256)'];
-    const balNow = await new ethers.Contract(MPC, erc, p).balanceOf(PROXY, { blockTag: M });
+    const balNow = await withFallback(q => new ethers.Contract(MPC, erc, q).balanceOf(PROXY, { blockTag: M }));
     let net = 0n;
     if (M > N) {
       for (const l of await scan('N이후 입금', { address: MPC, topics: [TRANSFER, null, pad(PROXY)] }, N + 1, M)) net += BigInt(l.data);
@@ -181,7 +190,8 @@ const num = v => Number(ethers.formatUnits(v, 18));
       console.log((await r.text()).includes('ok') ? '신뢰 배지: 기록 완료' : '⚠️ 신뢰 배지 기록 실패');
     } catch (e) { console.log('⚠️ 신뢰 배지 기록 실패:', e.message); }
 
-    const usdtBal = await new ethers.Contract(USDT, erc, p).balanceOf(PROXY, { blockTag: M });
+    const usdtBal = await withFallback(q => new ethers.Contract(USDT, erc, q).balanceOf(PROXY, { blockTag: M }));
+    if (retried) console.log(`ℹ️ 전용 노드 읽기 ${retried}번 재시도함 (불안정. 매일 이어지면 노드 설정 확인)`);
     if (usdtBal !== 0n) { console.log(`⚠️ USDT 잔액 0 아님: ${ethers.formatUnits(usdtBal, 6)} — 비정상 (자동 즉시교환 구조)`); fail = true; }
 
     // 진행 중 거래만 블록 시각을 조회해 판매 중 / 반환 대기 구분 (createdAt = 예치 블록 시각)
