@@ -28,4 +28,8 @@ const body = (process.argv[3] || '').slice(0, 170);
     } catch (e) { console.error('개별 실패:', e.statusCode || e.message); }
   }
   console.log(sent ? `발송 완료 (${sent}건)` : '발송 실패 — 구독 없음');
+  if (!sent) {   // 못 보냈는데 정상 종료(0)로 끝나면 호출한 쪽이 '알렸다'고 믿는다. 실패로 끝내고, 못 보낸 알림은 파일에 남겨 status_all 이 보여 준다
+    try { fs.appendFileSync('C:/ssabom/appdata/alerts-unsent.log', JSON.stringify({ at: new Date().toISOString(), title, body }) + String.fromCharCode(10)); } catch (_) {}
+    process.exitCode = 1;
+  }
 })().catch(e => { console.log('실패:', e.message); process.exit(1); });

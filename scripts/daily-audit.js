@@ -25,7 +25,7 @@ const PROXY = '0x958eed8B9c77f79420c3cde1998DF4EFb27e5972';
 const USDT = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 const DEPLOY_BLOCK = 89500000;
 const LIVE = 'https://mpcescrow.com/mpc-escrow/';
-const TIMEOUT = 86400; // 24h — 컨트랙트 TRADE_TIMEOUT과 동일
+let TIMEOUT = 86400; // 기본 24h. 아래에서 컨트랙트의 TRADE_TIMEOUT 을 직접 읽어 덮는다 (업그레이드로 값이 바뀌어도 이 점검이 어긋나지 않게)
 
 const TRANSFER  = ethers.id('Transfer(address,address,uint256)');
 const REVEALED  = ethers.id('TradeRevealed(bytes32,address,uint256,uint256,uint256)');
@@ -37,6 +37,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
 
 (async () => {
   let fail = false;
+  let warn = false;   // 장애는 아니지만 감시 한 곳이 못 돈 경우. 하루는 넘어가고 이틀 이어지면 장애로 올린다
   // ── 전용 노드 상태 확인 (Origin 헤더: 대시보드 허용목록 설정 후에도 작동하도록) ──
   let p, probeErr, probeTries = 0;
   // 한 번 흔들린 걸로 이상 표시하지 않는다 (Infura 가 들쭉날쭉하게 응답하는 날이 있다). 3번까지 시도하고 전부 실패해야 이상으로 알린다.
@@ -69,6 +70,10 @@ const num = v => Number(ethers.formatUnits(v, 18));
     for (let i = 0; i < 2; i++) { try { return await fn(p); } catch { retried++; await sleep(1500); } }
     return fn(pf);   // 공용 노드도 실패하면 예외가 그대로 올라가 '측정 실패'로 보고된다
   };
+  try {   // 거래 유효기간은 컨트랙트가 정한다. 코드의 값과 다르면 알려서 앱·서버 함수의 값도 같이 바꾸게 한다
+    const t = Number(await withFallback(q => new ethers.Contract(PROXY, ['function TRADE_TIMEOUT() view returns (uint256)'], q).TRADE_TIMEOUT()));
+    if (t > 0 && t !== TIMEOUT) { console.log(`ℹ️ 거래 유효기간이 ${t / 3600}시간으로 바뀜 (점검은 이 값으로 계산). 앱 화면(frontend/index.html)과 서버 함수의 값도 같은지 확인`); TIMEOUT = t; }
+  } catch (e) { console.log('⚠️ 거래 유효기간 읽기 실패 — 24시간 기준으로 계산:', e.shortMessage || e.message); warn = true; }
   const idx = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const MPC = idx.match(/MPC_TOKEN:\s*'(0x[0-9a-fA-F]{40})'/)[1];
 
@@ -100,7 +105,7 @@ const num = v => Number(ethers.formatUnits(v, 18));
     const days = Math.floor((new Date(exp.eventDate) - Date.now()) / 86400000);
     if (days <= 60) { console.log(`⚠️ 도메인 mpcescrow.com 만료 ${days}일 전 (${exp.eventDate.slice(0, 10)}) — 가비아에서 연장 필요!`); fail = true; }
     else console.log(`도메인 만료: ${days}일 남음 (${exp.eventDate.slice(0, 10)})`);
-  } catch (e) { console.log('⚠️ 도메인 만료 확인 실패:', e.message); }
+  } catch (e) { console.log('⚠️ 도메인 만료 확인 실패:', e.message); warn = true; }
 
   // ── ②-3 알림 구독자 명단 백업: 서버 사고 시 복구용 (금고 폴더, 30일 보관) ──
   try {
@@ -196,8 +201,9 @@ const num = v => Number(ethers.formatUnits(v, 18));
         headers: { apikey: 'sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', Authorization: 'Bearer sb_publishable_1Pd6p7r3MRyVQ9vZBABNIg_rv7h71Qh', 'Content-Type': 'application/json' },
         body: JSON.stringify({ p_key: ADMIN_KEY, p_ok: locked === bal, p_locked: num(locked) }),
       });
-      console.log((await r.text()).includes('ok') ? '신뢰 배지: 기록 완료' : '⚠️ 신뢰 배지 기록 실패');
-    } catch (e) { console.log('⚠️ 신뢰 배지 기록 실패:', e.message); }
+      if ((await r.text()).includes('ok')) console.log('신뢰 배지: 기록 완료');
+      else { console.log('⚠️ 신뢰 배지 기록 실패'); warn = true; }
+    } catch (e) { console.log('⚠️ 신뢰 배지 기록 실패:', e.message); warn = true; }
 
     const usdtBal = await withFallback(q => new ethers.Contract(USDT, erc, q).balanceOf(PROXY, { blockTag: M }));
     if (retried) console.log(`ℹ️ 전용 노드 읽기 ${retried}번 재시도함 (불안정. 매일 이어지면 노드 설정 확인)`);
@@ -257,11 +263,11 @@ const num = v => Number(ethers.formatUnits(v, 18));
       const cp2 = require('child_process');
       if (cp2.execSync('git -C C:/Projects/mpc-landing status --porcelain market.json').toString().trim()) {
         cp2.execSync('git -C C:/Projects/mpc-landing add market.json');
-        cp2.execSync('git -C C:/Projects/mpc-landing commit -m "data: 커뮤니티 시세 갱신"');
+        cp2.execSync('git -C C:/Projects/mpc-landing commit -m "data: 커뮤니티 시세 갱신" -- market.json');
         cp2.execSync('git -C C:/Projects/mpc-landing push origin main');
         console.log(`시세 발행: 완결 ${comp.length}건(30일 ${in30.length}건) → market.json 푸시`);
       } else console.log('시세 발행: 변동 없음');
-    } catch (e) { console.log('⚠️ 시세 발행 실패:', e.message); }
+    } catch (e) { console.log('⚠️ 시세 발행 실패:', e.message); warn = true; }
 
     // 이어읽기 저장: 확정 구간(N−1,000 이전)의 이벤트와 블록시각만 기록
     try {
@@ -289,10 +295,17 @@ const num = v => Number(ethers.formatUnits(v, 18));
     if (!r.ok) fail = true;
   } catch (e) { console.log('⚠️ 채팅방 서버 접속 실패:', e.message); fail = true; }
 
+  // 경고는 하루는 넘어가고, 어제 기록에도 경고가 있었으면(이틀째) 장애로 올려 폰으로 알린다
+  if (warn && !fail) {
+    let prev = {};
+    try { prev = JSON.parse(fs.readFileSync('C:/ssabom/appdata/audit-history.jsonl', 'utf8').trim().split('\n').pop()); } catch (_) {}
+    if (prev.warn) { fail = true; console.log('⚠️ 같은 종류의 경고가 이틀째 이어짐 (도메인 만료·신뢰 배지·시세 발행 중 하나) — 위 줄 확인'); }
+  }
+
   // ── 월간 리포트 재료: 하루 1줄 기록 (금고 폴더) ──
   try {
     fs.appendFileSync('C:/ssabom/appdata/audit-history.jsonl',
-      JSON.stringify({ d: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), ok: !fail, issues: issues.slice(0, 5) }) + '\n');
+      JSON.stringify({ d: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), ok: !fail, warn, issues: issues.slice(0, 5) }) + '\n');
   } catch (_) {}
 
   // ── 운영자 장애 알림: 이상 항목이 있으면 운영자 폰으로 즉시 푸시 ──
@@ -325,6 +338,6 @@ const num = v => Number(ethers.formatUnits(v, 18));
     } catch (e) { console.log('운영자 알림 발송 실패:', e.message); }
   }
 
-  console.log(fail ? '결과: ⚠️ 이상 항목 있음 — 위 내용 확인 필요' : '결과: ✅ 전체 정상');
+  console.log(fail ? '결과: ⚠️ 이상 항목 있음 — 위 내용 확인 필요' : (warn ? '결과: ✅ 정상 (경고 있음 — 위 ⚠️ 줄 확인, 이틀 이어지면 알림)' : '결과: ✅ 전체 정상'));
   process.exit(fail ? 2 : 0);
 })();

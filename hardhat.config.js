@@ -3,7 +3,8 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config({ path: "C:/ssabom/appdata/mpc-escrow.env" });
 require("dotenv").config();
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+// 키가 없으면 계정 없이 둔다. 예전에는 누구나 아는 하드햇 테스트 키로 대체돼서, 키 없이 배포 스크립트를 돌리면 그 키로 시도됐다
+const ACCOUNTS = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [];
 const POLYGONSCAN_API = process.env.POLYGONSCAN_API_KEY || "";
 
 module.exports = {
@@ -15,19 +16,19 @@ module.exports = {
     amoy: {
       url: "https://rpc-amoy.polygon.technology",
       chainId: 80002,
-      accounts: [PRIVATE_KEY],
+      accounts: ACCOUNTS,
       gasPrice: 35000000000,
     },
     mumbai: {
       url: "https://rpc-mumbai.maticvigil.com",
       chainId: 80001,
-      accounts: [PRIVATE_KEY],
+      accounts: ACCOUNTS,
       gasPrice: 35000000000,
     },
     polygon: {
-      url: "https://icy-green-pallet.matic.quiknode.pro/93742044e6bc41d9c0515376f1a8b0d8e8ef2efd/",
+      url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",   // 전용 노드 주소(키 포함)는 저장소에 두지 않는다. 금고의 mpc-escrow.env 에 POLYGON_RPC_URL 로 둔다
       chainId: 137,
-      accounts: [PRIVATE_KEY],
+      accounts: ACCOUNTS,
       gasPrice: "auto",
     },
   },

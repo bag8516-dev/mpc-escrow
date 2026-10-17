@@ -146,7 +146,7 @@ async function main(attempt = 0) {
     const diff = execSync(`git -C ${LANDING} status --porcelain stats.json`).toString().trim();
     if (diff) {
       execSync(`git -C ${LANDING} add stats.json`);
-      execSync(`git -C ${LANDING} commit -m "chain stats ${stats.updated}"`);
+      execSync(`git -C ${LANDING} commit -m "chain stats ${stats.updated}" -- stats.json`);
       execSync(`git -C ${LANDING} push origin main`);
       console.log('stats.json 게시 완료');
     } else console.log('stats.json 변화 없음');

@@ -36,6 +36,9 @@ async function main() {
   if (!rows.length) { console.log('새 신고 없음 (마지막 id ' + st.lastId + ')'); return; }
 
   const news = [];
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);   // 새 패턴 알림 횟수는 하루 단위로 센다 (고쳐진 뒤 다시 터진 것을 영원히 조용히 넘기지 않게)
+  for (const k of Object.keys(st.seen)) if (!k.startsWith(today + '|')) delete st.seen[k];
+  const knownCount = {};
   for (const row of rows) {
     st.lastId = Math.max(st.lastId, row.id);
     const hit = KNOWN.find(k => k.sig.test(row.msg || ''));
@@ -43,13 +46,23 @@ async function main() {
     const stale = hit && hit.name.includes('전파 지연') && String(row.ver) >= '2026101112';
     if (hit && !stale) {
       console.log(`[아는 패턴] #${row.id} v${row.ver} ${hit.name} — ${hit.rx} | ${String(row.msg).slice(0, 60)}`);
+      knownCount[hit.name] = (knownCount[hit.name] || 0) + 1;
       continue;
     }
     // 새 패턴: 정규화 서명으로 중복 묶기
-    const sig = String(row.msg || '').toLowerCase().replace(/0x[0-9a-f]+/g, '0x…').replace(/\d+/g, 'N').slice(0, 80);
+    const sig = today + '|' + String(row.msg || '').toLowerCase().replace(/0x[0-9a-f]+/g, '0x…').replace(/\d+/g, 'N').slice(0, 80);
     st.seen[sig] = (st.seen[sig] || 0) + 1;
     console.log(`[새 패턴] #${row.id} v${row.ver} ${row.env} | ${String(row.msg).slice(0, 90)}`);
     if (st.seen[sig] <= 2) news.push(row); // 같은 패턴 알림은 2회까지만 (알림 폭주 방지)
+  }
+
+  // 아는 패턴이라도 한 번에 많이 쏟아지면(넓은 패턴 'timeout' 같은 것이 장애를 가리지 않게) 폭증으로 알린다
+  const BURST = 20;
+  for (const [name, n] of Object.entries(knownCount)) {
+    if (n >= BURST && (st.seen[today + '|burst|' + name] || 0) < 1) {
+      st.seen[today + '|burst|' + name] = 1;
+      news.push({ ver: '-', env: '-', msg: `${name} ${n}건이 한 시간에 몰림 (아는 패턴이지만 폭증)` });
+    }
   }
 
   if (news.length) {
@@ -75,6 +88,7 @@ async function main() {
       } catch (e) { console.error('알림 개별 실패:', e.statusCode || e.message); }
     }
     console.log(sent ? `운영자 알림 발송 (${sent}건)` : '⚠️ 운영자 알림 발송 실패');
+    if (!sent) throw new Error('운영자 알림을 못 보냄 (상태를 저장하지 않아 다음에 다시 시도)');   // lastId 를 앞으로 보내면 이 알림이 영영 사라진다
   }
   fs.writeFileSync(STATE, JSON.stringify(st));
   console.log(`처리 완료: ${rows.length}건 (새 패턴 알림 대상 ${news.length}건)`);
