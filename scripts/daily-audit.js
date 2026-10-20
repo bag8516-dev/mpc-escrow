@@ -144,7 +144,8 @@ const num = v => Number(ethers.formatUnits(v, 18));
       for (let f = from; f <= to; f += 9500) {
         let ok = false;
         for (let a = 0; a < 6 && !ok; a++) {
-          try { out.push(...await p.getLogs({ ...filter, fromBlock: f, toBlock: Math.min(f + 9499, to) })); ok = true; }
+          // 마지막 시도는 공용 노드로 (2026-10-20 전용 노드가 몇 블록짜리 조회를 6번 연속 거절해 장부 점검이 '측정 실패'로 끝남. 30분 뒤 두 노드 모두 정상)
+          try { out.push(...await (a < 5 ? p : pf).getLogs({ ...filter, fromBlock: f, toBlock: Math.min(f + 9499, to) })); ok = true; }
           catch { await sleep(2000); }
         }
         if (!ok) throw new Error(`${label} 구간 조회 실패 (RPC 제한)`);
