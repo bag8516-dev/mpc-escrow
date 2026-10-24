@@ -862,7 +862,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026102302';
+const APP_VERSION = '2026102401';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -2202,6 +2202,7 @@ async function _createTradeFlowInner() {
 
     await callRevealAndDeposit(tradeId, mpcWei, priceWei, krwInt, secretHex);
     clearRegDraft(); // 등록 완료 — 이어하기 임시저장 제거
+    funnel('sell-ok'); // 등록 거래가 확정된 시점에 센다 (2026-10-24: 예전엔 조회가 늦은 경우에만 세어 정상 판매가 집계에서 빠짐)
 
     // 알림 미가입자에게 1회 제안 (구매자 입금·판매 완료·반환 안내를 폰으로)
     try {
@@ -2227,7 +2228,6 @@ async function _createTradeFlowInner() {
       // 조회 실패는 RPC 서버 동기화 지연(통상 수 초)일 뿐
       console.warn('RPC 동기화 지연 - tradeId:', tradeId);
       showToast('✅ 거래 생성 완료! 아래 링크를 구매자에게 전달하세요.');
-      funnel('sell-ok');
     }
 
     // 8. 로컬 저장
