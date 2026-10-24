@@ -862,7 +862,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026102401';
+const APP_VERSION = '2026102402';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3201,32 +3201,57 @@ async function editPriceById(tradeId) {
   } catch(err) { showError(parseError(err)); }
 }
 
-async function cancelTradeById(tradeId) {
-  const ok = await showConfirm('거래 취소', '거래를 취소하고 MPC를 돌려받겠습니까?');
-  if (!ok) return;
-  showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
+// 반환·취소 중복 방지 (2026-10-24: 같은 글의 반환이 몇 초 간격으로 두 번 나가, 첫 번째로 이미 돌려받았는데 두 번째가 '실패'로 찍혀 회원이 못 받은 줄 앎)
+// ① 처리 중인 글은 다시 눌러도 보내지 않는다 ② 보내기 직전에 체인 상태를 읽어 이미 끝난 글이면 보내지 않고 안내한다
+const _returning = new Set();
+async function alreadySettled(tradeId) {
   try {
+    const c = await readEscrow();
+    if (!c) return false;   // 상태를 못 읽으면 막지 않는다 (컨트랙트가 어차피 중복을 거절한다)
+    const st = Number((await c.getTrade(tradeId)).status);
+    if (st === 2) return false;
+    const name = ['NONE','COMMITTED','PENDING','ACTIVE','COMPLETED','CANCELLED','EXPIRED'][st] || 'NONE';
+    updateLocalTradeStatus(tradeId, name);
+    showToast(st === 4 ? '✅ 이미 판매가 완료된 거래입니다. 내역 탭에서 확인해주세요.' : '✅ 이미 처리된 거래입니다. MPC는 이미 지갑으로 돌아갔습니다.', 6000);
+    loadUserTrades();
+    return true;
+  } catch (_) { return false; }
+}
+
+async function cancelTradeById(tradeId) {
+  if (_returning.has(tradeId)) return;
+  _returning.add(tradeId);   // 확인 창을 기다리는 동안 다시 눌러도 막히게, 창보다 먼저 건다
+  try {
+    const ok = await showConfirm('거래 취소', '거래를 취소하고 MPC를 돌려받겠습니까?');
+    if (!ok) return;
+    if (await alreadySettled(tradeId)) return;
+    showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
     await callCancel(tradeId);
     updateLocalTradeStatus(tradeId, 'CANCELLED');
     showToast('✅ 거래가 취소됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
   } catch(err) { showError(parseError(err)); }
+  finally { _returning.delete(tradeId); }
 }
 
 
 async function expireTradeById(tradeId, skipConfirm) {
-  if (!skipConfirm) {
-    const ok = await showConfirm('만료 처리', '판매 시간(24시간)이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
-    if (!ok) return false;
-  }
-  if (!skipConfirm) showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
+  if (_returning.has(tradeId)) return false;
+  _returning.add(tradeId);   // 확인 창을 기다리는 동안 다시 눌러도 막히게, 창보다 먼저 건다
   try {
+    if (!skipConfirm) {
+      const ok = await showConfirm('만료 처리', '판매 시간(24시간)이 경과했습니다. 거래를 만료 처리하고 MPC를 돌려받겠습니까?');
+      if (!ok) return false;
+    }
+    if (await alreadySettled(tradeId)) return true;
+    if (!skipConfirm) showToast('⏳ 처리 중입니다. 잠시 후 Trust Wallet 서명 창이 표시됩니다...', 6000);
     await callExpire(tradeId);
     updateLocalTradeStatus(tradeId, 'EXPIRED');
     showToast('✅ 만료 처리됐습니다. MPC가 10분 내로 지갑에 들어옵니다. 미입금 시 카카오 문의 주세요.');
     loadUserTrades();
     return true;
   } catch(err) { showError(parseError(err)); return false; }
+  finally { _returning.delete(tradeId); }
 }
 
 // 반환 대기 연속 처리: 팝업에서 [확인]을 누르면 서명만 차례로 하면 되게
