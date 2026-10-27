@@ -2,6 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
+<style id="antiClickjack">html{display:none}</style>
+<script>/* 다른 사이트가 이 화면을 몰래 틀 안에 넣어 서명 버튼을 누르게 하는 것(클릭재킹)을 막는다 (2026-10-28 보안 점검) */if(self===top){var ac=document.getElementById('antiClickjack');ac.parentNode.removeChild(ac);}else{top.location=self.location;}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A0F1E">
 <link rel="manifest" href="manifest.json">
@@ -862,7 +865,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026102402';
+const APP_VERSION = '2026102801';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {

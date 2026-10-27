@@ -2,6 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
+<style id="antiClickjack">html{display:none}</style>
+<script>/* 다른 사이트가 이 화면을 몰래 틀 안에 넣어 서명 버튼을 누르게 하는 것(클릭재킹)을 막는다 (2026-10-28 보안 점검) */if(self===top){var ac=document.getElementById('antiClickjack');ac.parentNode.removeChild(ac);}else{top.location=self.location;}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MPC 에스크로 관리자</title>
 <link rel="manifest" href="admin-manifest.json">
