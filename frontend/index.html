@@ -14,6 +14,14 @@
 <meta name="description" content="MPC 코인을 회원끼리 안전하게 사고파는 에스크로 앱입니다. 스마트 컨트랙트가 거래가 끝날 때까지 코인을 보관하고, 구매자 입금이 확인되면 자동으로 맞교환됩니다.">
 <meta name="keywords" content="MPC 에스크로, MPC 코인, MPC 거래, 미네랄 프로젝트 코인, 안전거래, P2P 거래">
 <link rel="canonical" href="https://mpcescrow.com/mpc-escrow/">
+<!-- 카톡·SNS 에 앱 주소를 보낼 때 뜨는 미리보기 (2026-10-28) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="MPC 에스크로 — 회원끼리 안전하게 사고파는 앱">
+<meta property="og:description" content="스마트 컨트랙트가 코인을 맡아 두고, 구매자 입금이 확인되면 자동으로 맞교환됩니다. 회원가입 없이 지갑만 연결하면 됩니다.">
+<meta property="og:url" content="https://mpcescrow.com/mpc-escrow/">
+<meta property="og:image" content="https://mpcescrow.com/mpc-escrow/og-escrow.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 /* ═══════════════════════════════════════════════
    기본 리셋 & 변수 — 네이비 + 골드 테마
@@ -865,7 +873,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026102801';
+const APP_VERSION = '2026102802';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {

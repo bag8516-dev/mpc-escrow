@@ -21,13 +21,14 @@ if (git status --porcelain | Where-Object { $_ -match '^[AM]' }) {
 # 2) gh-pages 로 복사
 G checkout gh-pages
 try {
-  G checkout main -- frontend/index.html frontend/version.json admin.html
+  G checkout main -- frontend/index.html frontend/version.json admin.html frontend/og-escrow.png
   Copy-Item frontend\index.html index.html -Force
   Copy-Item frontend\version.json version.json -Force
+  Copy-Item frontend\og-escrow.png og-escrow.png -Force
   $vRoot = Ver 'version.json' '"v":"(\d+)"'
   $vRootApp = Ver 'index.html' "APP_VERSION = '(\d+)'"
   if ($vRoot -ne $vApp -or $vRootApp -ne $vApp) { throw "버전 불일치(배포): 앱=$vApp / 루트 version.json=$vRoot / 루트 index=$vRootApp" }
-  G add index.html version.json admin.html frontend/index.html frontend/version.json
+  G add index.html version.json admin.html og-escrow.png frontend/index.html frontend/version.json frontend/og-escrow.png
   if (git status --porcelain | Where-Object { $_ -match '^[AM]' }) {
     G commit -m "deploy $vApp" -m $attr
     G push origin gh-pages
