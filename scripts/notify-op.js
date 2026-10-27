@@ -16,7 +16,11 @@ const body = (process.argv[3] || '').slice(0, 170);
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dump: true, key: ADMIN_KEY }),
   });
-  const subs = (((await r.json()).subs) || []).filter(s => s.wallet === OPERATOR);
+  // 구독은 지갑 주인 확인 없이 등록되므로, 운영자 지갑으로 등록한 남의 기기도 섞일 수 있다.
+  // 미리 적어 둔 운영자 기기(구독 주소 해시)에만 보낸다 (2026-10-28 보안 점검)
+  const allow = fs.readFileSync('C:/ssabom/appdata/mpc-op-endpoints.txt', 'utf8').split(/\r?\n/).filter(x => /^[0-9a-f]{16}$/.test(x.trim())).map(x => x.trim());
+  const hash = e => require('crypto').createHash('sha256').update(e).digest('hex').slice(0, 16);
+  const subs = (((await r.json()).subs) || []).filter(s => s.wallet === OPERATOR && allow.includes(hash(s.endpoint)));
   let sent = 0;
   for (const s of subs) {
     try {
