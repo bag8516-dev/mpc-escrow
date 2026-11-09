@@ -11,7 +11,7 @@ paths = [
 ]
 regexes = [
   '''sb_publishable_[A-Za-z0-9_]+''',
-  '''0x[a-fA-F0-9]{40}''',
+  '''^0x[a-fA-F0-9]{40}$''',   # 주소 그 자체만 허용 (앞뒤 고정 안 하면 64자리 지갑 개인키 안의 40자리도 허용돼 개인키를 놓친다, 2026-11-10 점검)
   '''BI2VD37ndfhXCV1iu_S1_VS7f82axcVimZ61ESWuq64iCaeiwB0FmOPlaron2jTeuKYW98_VEuhK8USYXbwEU_k''',
   '''BCNONo7fUbako3kKs8zuUNMC9isdlvqPJ0TCBq1Cu0xqZ7iTWdAzA8ZERr1Li8WuPcYeflulD2q-1rpg5ovvTz4''',
   '''BFInIayGaK[A-Za-z0-9_-]+''',
