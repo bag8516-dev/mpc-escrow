@@ -836,7 +836,7 @@ async function loadTxList() {
       : html;
 
   } catch (err) {
-    listEl.innerHTML = '<div class="empty-state">조회 실패: ' + (err?.message || String(err)) + '</div>';
+    listEl.innerHTML = '<div class="empty-state">조회 실패: ' + String(err?.message || err).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) + '</div>';   // 오류 원문은 글자로 (2026-11-10 점검)
   }
 }
 
