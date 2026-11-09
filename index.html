@@ -874,7 +874,7 @@ let signGuideCallback = null;
 // ── 버전 자동 갱신 ─────────────────────────────────────────────────────────
 // Trust Wallet 브라우저가 며칠 전 탭·캐시를 재사용해 구버전이 계속 실행되는 문제 방지.
 // 서버의 version.json과 비교해서 다르면 자동 새로고침 (배포 시 두 값을 함께 올림)
-const APP_VERSION = '2026103001';
+const APP_VERSION = '2026111001';
 let _lastHiddenAt = 0;
 async function checkAppVersion() {
   try {
@@ -3956,7 +3956,9 @@ function parseError(err) {
       return val[1];
     }
   }
-  return `❌ 오류: ${msg}<br><br>문제가 반복되면 카카오 문의를 이용해주세요.`;
+  // 오류 원문은 바깥(지갑·RPC)에서 온 글이라 HTML 로 해석되지 않게 바꿔 넣는다 (2026-11-10 점검)
+  const safe = String(msg).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return `❌ 오류: ${safe}<br><br>문제가 반복되면 카카오 문의를 이용해주세요.`;
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
