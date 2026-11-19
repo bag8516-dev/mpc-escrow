@@ -19,6 +19,7 @@ const KNOWN = [
   { sig: /HTTP 401|unauthorized/i, name: '지갑 노드 일시 오류', rx: '예비 연결 안내 (기존 확립 해법)' },
   { sig: /timeout|network error|failed to fetch|시간.?초과/i, name: '통신 일시 장애', rx: '재시도 안내' },
   { sig: /could not detect network/i, name: '조회망 연결 실패', rx: '재시도 안내, 반복되면 조회망 점검' },
+  { sig: /not set up yet|complete onboarding/i, name: '지갑 확장 설치만 하고 지갑 안 만듦', rx: 'PC 크롬에 트러스트월렛 확장만 깔고 지갑 생성 전 (2026-11-19 id 136) — 지갑 만들기 안내, 조치 불필요' },
 ];
 
 async function main() {
